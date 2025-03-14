@@ -19,6 +19,8 @@ function PlayerList({ players, currentPlayerId }) {
                 </span>)}
               <span className="font-medium text-gray-900">
                 {player.id === currentPlayerId ? `${player.name} (You)` : player.name}
+                {player.isDrawing && ' ✏️'}
+                {player.hasGuessedCorrectly && ' 🎯'}
               </span>
             </div>
             <span className="font-bold text-black">{player.score}</span>

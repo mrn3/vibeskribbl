@@ -16,6 +16,7 @@ interface Player {
   name: string;
   score: number;
   isDrawing: boolean;
+  hasGuessedCorrectly?: boolean;
 }
 
 interface Message {
@@ -282,7 +283,15 @@ export default function GamePageContent() {
     });
     
     socket.on('player-guessed', ({ playerId: guesserId, playerName: guesserName }: PlayerGuessedData) => {
-      addSystemMessage(`${guesserName} guessed the word!`, false, true);
+      // Create a more celebratory message for correct guesses
+      addSystemMessage(`🎉 ${guesserName} guessed the word correctly! 🎉`, true, true);
+      
+      // Add celebration sound/notification (future enhancement)
+      
+      // If there's a drawing player, update their status as well
+      if (isDrawing) {
+        addSystemMessage(`${guesserName} figured out your drawing!`, false, true);
+      }
     });
     
     socket.on('word-guessed', ({ word }: WordToDrawData) => {

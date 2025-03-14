@@ -5,6 +5,7 @@ interface Player {
   name: string;
   score: number;
   isDrawing: boolean;
+  hasGuessedCorrectly?: boolean;
 }
 
 interface PlayerListProps {
@@ -39,6 +40,8 @@ export default function PlayerList({ players, currentPlayerId }: PlayerListProps
               )}
               <span className="font-medium text-gray-900">
                 {player.id === currentPlayerId ? `${player.name} (You)` : player.name}
+                {player.isDrawing && ' ✏️'}
+                {player.hasGuessedCorrectly && ' 🎯'}
               </span>
             </div>
             <span className="font-bold text-black">{player.score}</span>

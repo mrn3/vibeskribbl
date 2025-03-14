@@ -21,9 +21,11 @@ function Chat({ playerId, onSendMessage, messages, disabled = false, placeholder
     return (<div className="flex flex-col h-full bg-white border rounded-lg shadow-md">
       <div className="flex-1 overflow-y-auto p-4 space-y-2">
         {messages.map((msg) => (<div key={msg.id} className={`p-2 rounded ${msg.isSystemMessage
-                ? 'bg-gray-100 text-gray-900 font-medium'
+                ? msg.isCorrectGuess
+                    ? 'bg-green-500 text-white font-bold animate-pulse border-2 border-yellow-400'
+                    : 'bg-gray-100 text-gray-900 font-medium'
                 : msg.isCorrectGuess
-                    ? 'bg-green-100 text-green-900 font-medium'
+                    ? 'bg-green-100 text-green-900 font-bold border-2 border-green-500'
                     : msg.playerId === playerId
                         ? 'bg-blue-100 text-blue-900 font-medium ml-8'
                         : 'bg-gray-200 text-gray-900 font-medium mr-8'}`}>

@@ -50,9 +50,11 @@ export default function Chat({
             key={msg.id}
             className={`p-2 rounded ${
               msg.isSystemMessage 
-                ? 'bg-gray-100 text-gray-900 font-medium' 
+                ? msg.isCorrectGuess
+                  ? 'bg-green-500 text-white font-bold animate-pulse border-2 border-yellow-400' 
+                  : 'bg-gray-100 text-gray-900 font-medium'
                 : msg.isCorrectGuess
-                  ? 'bg-green-100 text-green-900 font-medium'
+                  ? 'bg-green-100 text-green-900 font-bold border-2 border-green-500'
                   : msg.playerId === playerId 
                     ? 'bg-blue-100 text-blue-900 font-medium ml-8' 
                     : 'bg-gray-200 text-gray-900 font-medium mr-8'

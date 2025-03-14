@@ -50,12 +50,13 @@ function getSocket() {
     }
     // Create new socket
     socket = (0, socket_io_client_1.io)(socketUrl, {
-        reconnectionAttempts: 2,
-        reconnectionDelay: 2000,
-        timeout: 10000,
-        transports: ['websocket'],
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000,
+        timeout: 20000,
+        transports: ['websocket', 'polling'], // Fall back to polling if WebSocket fails
         autoConnect: true,
-        forceNew: false
+        forceNew: true, // Create a fresh connection
+        closeOnBeforeunload: true
     });
     // Connection event listeners
     socket.on('connect', () => {
@@ -74,13 +75,61 @@ function getSocket() {
         }
     });
     socket.on('connect_error', (error) => {
-        console.error('Socket connection error:', error);
+        console.error('Socket connection error:', error.message);
         isConnecting = false;
-        // If we have a connection error, clean up and don't auto-reconnect
-        if (connectionAttempts >= MAX_CONNECTION_ATTEMPTS) {
+        // Simplify the fallback logic to avoid type errors
+        if (socket) {
+            console.log('Attempting to fallback to polling transport');
+            // Try to reconnect after a short delay using polling
+            setTimeout(() => {
+                try {
+                    // Create a new socket with polling only
+                    cleanupSocket();
+                    socket = (0, socket_io_client_1.io)(socketUrl, {
+                        reconnectionAttempts: 5,
+                        reconnectionDelay: 1000,
+                        timeout: 20000,
+                        transports: ['polling'],
+                        autoConnect: true,
+                        forceNew: true
+                    });
+                    // Add essential listeners
+                    socket.on('connect', () => {
+                        console.log('Socket connected successfully via polling:', socket === null || socket === void 0 ? void 0 : socket.id);
+                        isConnecting = false;
+                        connectionAttempts = 0;
+                    });
+                    socket.on('connect_error', (err) => {
+                        console.error('Polling transport also failed:', err.message);
+                        isConnecting = false;
+                        if (connectionAttempts >= MAX_CONNECTION_ATTEMPTS) {
+                            cleanupSocket();
+                        }
+                    });
+                }
+                catch (err) {
+                    console.error('Error during transport fallback:', err);
+                }
+            }, 1000);
+        }
+        else if (connectionAttempts >= MAX_CONNECTION_ATTEMPTS) {
             console.log('Max connection attempts reached, giving up');
             cleanupSocket();
         }
+    });
+    // Socket.IO manager event listeners for reconnection monitoring
+    socket.io.on("reconnect_attempt", () => {
+        console.log(`Socket.IO reconnect attempt`);
+    });
+    socket.io.on("reconnect", () => {
+        console.log(`Socket.IO reconnected successfully`);
+    });
+    socket.io.on("reconnect_error", (error) => {
+        console.error('Socket.IO reconnection error:', error);
+    });
+    socket.io.on("reconnect_failed", () => {
+        console.error('Socket.IO reconnection failed after maximum attempts');
+        cleanupSocket();
     });
     // Handle browser events for cleanup
     if (typeof window !== 'undefined') {

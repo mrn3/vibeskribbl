@@ -7,6 +7,7 @@ interface Player {
   name: string;
   score: number;
   isDrawing: boolean;
+  hasGuessedCorrectly?: boolean;
 }
 
 interface Room {
@@ -128,11 +129,21 @@ export function setupSocketServer(server: HTTPServer) {
 
     // Handle chat messages and word guessing
     socket.on('chat-message', ({ roomId, message, playerId }) => {
+      console.log(`Received chat message from ${playerId} in room ${roomId}: "${message}"`);
+      
       const room = rooms.get(roomId);
-      if (!room) return;
+      if (!room) {
+        console.error(`Room ${roomId} not found for chat message`);
+        return;
+      }
 
       const player = room.players.find(p => p.id === playerId);
-      if (!player) return;
+      if (!player) {
+        console.error(`Player ${playerId} not found in room ${roomId}`);
+        return;
+      }
+
+      console.log(`Processing message from ${player.name} (${playerId}): "${message}"`);
 
       // Special debug command to force drawing mode
       if (message.startsWith('/drawme')) {
@@ -165,29 +176,78 @@ export function setupSocketServer(server: HTTPServer) {
         return;
       }
 
-      // Check if message is the correct word
-      if (room.gameState === 'playing' && 
-          room.currentWord && 
-          message.toLowerCase() === room.currentWord.toLowerCase() &&
-          player.id !== room.currentDrawer) {
-        // Player guessed correctly
-        player.score += 100;
-        io.to(roomId).emit('player-guessed', { playerId: player.id, playerName: player.name });
-        socket.emit('word-guessed', { word: room.currentWord });
-        
-        // Check if all players have guessed
-        const nonDrawingPlayers = room.players.filter(p => p.id !== room.currentDrawer);
-        const allGuessed = nonDrawingPlayers.every(p => {
-          const hasGuessed = io.sockets.adapter.rooms.get(`${roomId}-guessed`)?.has(p.id);
-          return hasGuessed;
+      // Debug command to show current word
+      if (message === '/word' && player.id === room.currentDrawer) {
+        socket.emit('chat-update', {
+          playerId: 'system',
+          playerName: 'System',
+          message: `Current word is: "${room.currentWord}"`
         });
+        return;
+      }
+
+      // Debug command to show game state
+      if (message === '/state') {
+        const stateInfo = `Game state: ${room.gameState}
+Current drawer: ${room.currentDrawer ? room.players.find(p => p.id === room.currentDrawer)?.name : 'None'}
+Current word: ${player.id === room.currentDrawer ? room.currentWord : '[hidden]'}
+Round: ${room.currentRound}/${room.maxRounds}`;
         
-        if (allGuessed) {
-          // Move to next round
-          nextRound(io, room);
+        socket.emit('chat-update', {
+          playerId: 'system',
+          playerName: 'System',
+          message: stateInfo
+        });
+        return;
+      }
+
+      // Check if message is the correct word
+      if (room.gameState === 'playing' && room.currentWord) {
+        console.log(`Checking guess: "${message.toLowerCase()}" against word "${room.currentWord.toLowerCase()}" by ${player.name}`);
+        
+        if (message.toLowerCase() === room.currentWord.toLowerCase() &&
+            player.id !== room.currentDrawer) {
+          // Player guessed correctly
+          console.log(`CORRECT GUESS by ${player.name}!`);
+          player.score += 100;
+          player.hasGuessedCorrectly = true;
+          
+          // Join the player to a guessed-room to track who has guessed
+          socket.join(`${roomId}-guessed`);
+          
+          console.log(`Player ${player.name} guessed the word: ${room.currentWord}`);
+          
+          // Notify everyone
+          io.to(roomId).emit('player-guessed', { playerId: player.id, playerName: player.name });
+          socket.emit('word-guessed', { word: room.currentWord });
+          
+          // Send updated player list to everyone
+          io.to(roomId).emit('room-update', room);
+          
+          // Check if all players have guessed
+          const nonDrawingPlayers = room.players.filter(p => p.id !== room.currentDrawer);
+          const allGuessed = nonDrawingPlayers.every(p => p.hasGuessedCorrectly);
+          
+          if (allGuessed) {
+            console.log('All players have guessed the word, moving to next round');
+            // Move to next round
+            nextRound(io, room);
+          }
+          
+          // Don't emit this as a regular chat message
+          return;
+        } else {
+          // Regular chat message
+          console.log(`Regular chat message from ${player.name}: "${message}"`);
+          io.to(roomId).emit('chat-update', {
+            playerId,
+            playerName: player.name,
+            message
+          });
         }
       } else {
-        // Regular chat message
+        // Game not in playing state or no current word, just send as regular chat
+        console.log(`Chat message in non-playing state from ${player.name}: "${message}"`);
         io.to(roomId).emit('chat-update', {
           playerId,
           playerName: player.name,
@@ -305,8 +365,23 @@ function nextRound(io: SocketIOServer, room: Room) {
     return;
   }
   
-  // Reset drawing flag for all players
-  room.players.forEach(p => p.isDrawing = false);
+  // Reset drawing flag and guessed status for all players
+  room.players.forEach(p => {
+    p.isDrawing = false;
+    p.hasGuessedCorrectly = false;
+  });
+  
+  // Remove all players from the guessed room for this round
+  const guessedRoom = `${room.id}-guessed`;
+  const socketIdsInGuessedRoom = io.sockets.adapter.rooms.get(guessedRoom);
+  if (socketIdsInGuessedRoom) {
+    for (const socketId of socketIdsInGuessedRoom) {
+      const socket = io.sockets.sockets.get(socketId);
+      if (socket) {
+        socket.leave(guessedRoom);
+      }
+    }
+  }
   
   // Select next drawer (round robin)
   const currentDrawerIndex = room.players.findIndex(p => p.id === room.currentDrawer);
