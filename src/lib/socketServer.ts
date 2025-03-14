@@ -1,0 +1,330 @@
+import { Server as SocketIOServer } from 'socket.io';
+import { Server as HTTPServer } from 'http';
+import { v4 as uuidv4 } from 'uuid';
+
+interface Player {
+  id: string;
+  name: string;
+  score: number;
+  isDrawing: boolean;
+}
+
+interface Room {
+  id: string;
+  players: Player[];
+  currentWord?: string;
+  currentDrawer?: string;
+  gameState: 'waiting' | 'playing' | 'between-rounds';
+  roundTime: number;
+  currentRound: number;
+  maxRounds: number;
+  wordOptions?: string[];
+}
+
+const rooms = new Map<string, Room>();
+const wordList = [
+  'dog', 'cat', 'house', 'tree', 'beach', 'phone', 'computer', 'chair', 
+  'table', 'book', 'car', 'bicycle', 'mountain', 'river', 'ocean', 'sun', 
+  'moon', 'star', 'pizza', 'hamburger', 'cake', 'flower', 'bird', 'fish',
+  'clock', 'shoe', 'hat', 'glasses', 'shirt', 'pants', 'door', 'window'
+];
+
+export function setupSocketServer(server: HTTPServer) {
+  const io = new SocketIOServer(server, {
+    cors: {
+      origin: '*',
+      methods: ['GET', 'POST']
+    },
+    transports: ['websocket', 'polling'],
+    pingTimeout: 60000,
+    pingInterval: 25000
+  });
+
+  io.on('connection', (socket) => {
+    console.log('New client connected', socket.id);
+
+    // Create or join a room
+    socket.on('join-room', ({ roomId, playerName }) => {
+      let room: Room;
+
+      if (!roomId) {
+        // Create a new room if no roomId provided
+        roomId = uuidv4();
+        room = {
+          id: roomId,
+          players: [],
+          gameState: 'waiting',
+          roundTime: 80,
+          currentRound: 0,
+          maxRounds: 3
+        };
+        rooms.set(roomId, room);
+      } else {
+        // Get existing room
+        room = rooms.get(roomId) as Room;
+        
+        // If room doesn't exist, create a new one
+        if (!room) {
+          room = {
+            id: roomId,
+            players: [],
+            gameState: 'waiting',
+            roundTime: 80,
+            currentRound: 0,
+            maxRounds: 3
+          };
+          rooms.set(roomId, room);
+        }
+      }
+
+      // Add player to room
+      const player: Player = {
+        id: socket.id,
+        name: playerName || `Player ${room.players.length + 1}`,
+        score: 0,
+        isDrawing: false
+      };
+
+      room.players.push(player);
+      socket.join(roomId);
+
+      // Send room data to all clients in the room
+      io.to(roomId).emit('room-update', room);
+      socket.emit('room-joined', { roomId, playerId: player.id });
+
+      // If enough players and not already playing, start the game
+      if (room.players.length >= 2 && room.gameState === 'waiting') {
+        startGame(io, room);
+      }
+    });
+
+    // Handle drawing data
+    socket.on('draw', ({ roomId, drawData }) => {
+      // Forward drawing data to all clients in the room except the sender
+      socket.to(roomId).emit('draw-update', drawData);
+    });
+
+    // Handle chat messages and word guessing
+    socket.on('chat-message', ({ roomId, message, playerId }) => {
+      const room = rooms.get(roomId);
+      if (!room) return;
+
+      const player = room.players.find(p => p.id === playerId);
+      if (!player) return;
+
+      // Check if message is the correct word
+      if (room.gameState === 'playing' && 
+          room.currentWord && 
+          message.toLowerCase() === room.currentWord.toLowerCase() &&
+          player.id !== room.currentDrawer) {
+        // Player guessed correctly
+        player.score += 100;
+        io.to(roomId).emit('player-guessed', { playerId: player.id, playerName: player.name });
+        socket.emit('word-guessed', { word: room.currentWord });
+        
+        // Check if all players have guessed
+        const nonDrawingPlayers = room.players.filter(p => p.id !== room.currentDrawer);
+        const allGuessed = nonDrawingPlayers.every(p => {
+          const hasGuessed = io.sockets.adapter.rooms.get(`${roomId}-guessed`)?.has(p.id);
+          return hasGuessed;
+        });
+        
+        if (allGuessed) {
+          // Move to next round
+          nextRound(io, room);
+        }
+      } else {
+        // Regular chat message
+        io.to(roomId).emit('chat-update', {
+          playerId,
+          playerName: player.name,
+          message
+        });
+      }
+    });
+
+    // Handle word selection by drawer
+    socket.on('word-selected', ({ roomId, word }) => {
+      const room = rooms.get(roomId);
+      if (!room || room.currentDrawer !== socket.id) return;
+
+      room.currentWord = word;
+      room.wordOptions = undefined;
+      
+      // Notify everyone that word was selected
+      io.to(roomId).emit('round-started', {
+        drawerId: room.currentDrawer,
+        wordLength: word.length
+      });
+      
+      // Send the actual word to the drawer
+      socket.emit('word-to-draw', { word });
+      
+      // Start round timer
+      startRoundTimer(io, room);
+    });
+
+    // Handle clear canvas
+    socket.on('clear-canvas', ({ roomId }) => {
+      const room = rooms.get(roomId);
+      if (!room || room.currentDrawer !== socket.id) return;
+      
+      io.to(roomId).emit('canvas-cleared');
+    });
+
+    // Handle player disconnect
+    socket.on('disconnect', () => {
+      console.log('Client disconnected', socket.id);
+      
+      // Find and remove player from any rooms
+      for (const [roomId, room] of rooms.entries()) {
+        const playerIndex = room.players.findIndex(p => p.id === socket.id);
+        
+        if (playerIndex !== -1) {
+          // Remove player from room
+          room.players.splice(playerIndex, 1);
+          
+          // If this was the drawer, move to next round
+          if (room.currentDrawer === socket.id && room.gameState === 'playing') {
+            nextRound(io, room);
+          }
+          
+          // If not enough players, reset game
+          if (room.players.length < 2) {
+            room.gameState = 'waiting';
+            room.currentRound = 0;
+            io.to(roomId).emit('game-stopped', { reason: 'Not enough players' });
+          }
+          
+          // Update room state for remaining players
+          io.to(roomId).emit('room-update', room);
+          
+          // Remove room if empty
+          if (room.players.length === 0) {
+            rooms.delete(roomId);
+          }
+          
+          break;
+        }
+      }
+    });
+  });
+
+  return io;
+}
+
+// Helper functions
+
+function startGame(io: SocketIOServer, room: Room) {
+  room.gameState = 'playing';
+  room.currentRound = 1;
+  
+  // Reset player scores
+  room.players.forEach(player => {
+    player.score = 0;
+    player.isDrawing = false;
+  });
+  
+  // Select first drawer and start round
+  nextRound(io, room);
+  
+  // Notify everyone that game started
+  io.to(room.id).emit('game-started', { 
+    currentRound: room.currentRound,
+    maxRounds: room.maxRounds
+  });
+}
+
+function nextRound(io: SocketIOServer, room: Room) {
+  // Clear any timers
+  // (In a real implementation, you'd store and clear the timer)
+  
+  // Check if game should end
+  if (room.currentRound > room.maxRounds) {
+    endGame(io, room);
+    return;
+  }
+  
+  // Reset drawing flag for all players
+  room.players.forEach(p => p.isDrawing = false);
+  
+  // Select next drawer (round robin)
+  const currentDrawerIndex = room.players.findIndex(p => p.id === room.currentDrawer);
+  const nextDrawerIndex = (currentDrawerIndex + 1) % room.players.length;
+  const nextDrawer = room.players[nextDrawerIndex];
+  
+  nextDrawer.isDrawing = true;
+  room.currentDrawer = nextDrawer.id;
+  
+  // Generate word options
+  const wordOptions = getRandomWords(3);
+  room.wordOptions = wordOptions;
+  
+  // Move to between-rounds state
+  room.gameState = 'between-rounds';
+  
+  // Send word options only to the drawer
+  const drawerSocket = io.sockets.sockets.get(nextDrawer.id);
+  if (drawerSocket) {
+    drawerSocket.emit('word-options', { options: wordOptions });
+  }
+  
+  // Notify everyone about the drawer
+  io.to(room.id).emit('new-drawer', { 
+    drawerId: nextDrawer.id,
+    drawerName: nextDrawer.name,
+    roundNumber: room.currentRound
+  });
+  
+  // Increment round counter if we've gone through all players
+  if (nextDrawerIndex === 0) {
+    room.currentRound++;
+  }
+}
+
+function endGame(io: SocketIOServer, room: Room) {
+  room.gameState = 'waiting';
+  
+  // Sort players by score
+  const sortedPlayers = [...room.players].sort((a, b) => b.score - a.score);
+  
+  // Notify everyone about game end and final scores
+  io.to(room.id).emit('game-ended', { 
+    players: sortedPlayers,
+    winner: sortedPlayers[0]
+  });
+}
+
+function startRoundTimer(io: SocketIOServer, room: Room) {
+  // In a real implementation, you'd set up an actual timer
+  // and store it to be canceled if needed
+  
+  // For now, just emit an event that will be handled by clients
+  io.to(room.id).emit('round-timer-started', { 
+    duration: room.roundTime
+  });
+  
+  // Simulate a timer ending after roundTime seconds
+  setTimeout(() => {
+    if (rooms.has(room.id) && room.gameState === 'playing') {
+      io.to(room.id).emit('round-ended', { 
+        word: room.currentWord
+      });
+      nextRound(io, room);
+    }
+  }, room.roundTime * 1000);
+}
+
+function getRandomWords(count: number): string[] {
+  const words: string[] = [];
+  const wordListCopy = [...wordList];
+  
+  for (let i = 0; i < count; i++) {
+    if (wordListCopy.length === 0) break;
+    const index = Math.floor(Math.random() * wordListCopy.length);
+    words.push(wordListCopy[index]);
+    wordListCopy.splice(index, 1);
+  }
+  
+  return words;
+} 
