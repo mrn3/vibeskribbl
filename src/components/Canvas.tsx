@@ -60,7 +60,7 @@ export default function Canvas({
   
   console.log('Canvas rendered with isDrawing:', isDrawing, 'size:', canvasSize);
   
-  // Initialize canvas context
+  // Initialize canvas context - only when size changes
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -68,8 +68,18 @@ export default function Canvas({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
+    // Store existing image data if we have a context already
+    let imageData: ImageData | null = null;
+    if (ctxRef.current) {
+      try {
+        // Try to save the current canvas content
+        imageData = ctxRef.current.getImageData(0, 0, canvas.width, canvas.height);
+      } catch (err) {
+        console.log('Could not save canvas state:', err);
+      }
+    }
+    
     // Set canvas resolution to match display size
-    const dpr = window.devicePixelRatio || 1;
     canvas.width = canvasSize.width;
     canvas.height = canvasSize.height;
     
@@ -86,8 +96,28 @@ export default function Canvas({
     // Store context for later use
     ctxRef.current = ctx;
     
+    // Restore previous drawing if available
+    if (imageData) {
+      try {
+        ctx.putImageData(imageData, 0, 0);
+      } catch (err) {
+        console.log('Could not restore canvas state:', err);
+      }
+    }
+    
     console.log('Canvas initialized with context, size:', canvasSize);
-  }, [canvasSize.width, canvasSize.height, color, lineWidth]);
+  }, [canvasSize.width, canvasSize.height]);
+  
+  // Update context drawing styles when color or line width changes - without clearing the canvas
+  useEffect(() => {
+    const ctx = ctxRef.current;
+    if (!ctx) return;
+    
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineWidth;
+    
+    console.log('Updated drawing styles - color:', color, 'lineWidth:', lineWidth);
+  }, [color, lineWidth]);
   
   // Clear the canvas
   const clearCanvasFunc = useCallback(() => {
@@ -140,15 +170,6 @@ export default function Canvas({
       handleRemoteDraw(remoteDrawData);
     }
   }, [remoteDrawData, handleRemoteDraw]);
-  
-  // Update context when color or line width changes
-  useEffect(() => {
-    const ctx = ctxRef.current;
-    if (!ctx) return;
-    
-    ctx.strokeStyle = color;
-    ctx.lineWidth = lineWidth;
-  }, [color, lineWidth]);
   
   // Setup mouse events
   useEffect(() => {

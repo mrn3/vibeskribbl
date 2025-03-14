@@ -31,7 +31,7 @@ function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = undefined, he
         }
     }, [width, height]);
     console.log('Canvas rendered with isDrawing:', isDrawing, 'size:', canvasSize);
-    // Initialize canvas context
+    // Initialize canvas context - only when size changes
     (0, react_1.useEffect)(() => {
         const canvas = canvasRef.current;
         if (!canvas)
@@ -39,8 +39,18 @@ function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = undefined, he
         const ctx = canvas.getContext('2d');
         if (!ctx)
             return;
+        // Store existing image data if we have a context already
+        let imageData = null;
+        if (ctxRef.current) {
+            try {
+                // Try to save the current canvas content
+                imageData = ctxRef.current.getImageData(0, 0, canvas.width, canvas.height);
+            }
+            catch (err) {
+                console.log('Could not save canvas state:', err);
+            }
+        }
         // Set canvas resolution to match display size
-        const dpr = window.devicePixelRatio || 1;
         canvas.width = canvasSize.width;
         canvas.height = canvasSize.height;
         // Set canvas display size
@@ -53,8 +63,26 @@ function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = undefined, he
         ctx.lineWidth = lineWidth;
         // Store context for later use
         ctxRef.current = ctx;
+        // Restore previous drawing if available
+        if (imageData) {
+            try {
+                ctx.putImageData(imageData, 0, 0);
+            }
+            catch (err) {
+                console.log('Could not restore canvas state:', err);
+            }
+        }
         console.log('Canvas initialized with context, size:', canvasSize);
-    }, [canvasSize.width, canvasSize.height, color, lineWidth]);
+    }, [canvasSize.width, canvasSize.height]);
+    // Update context drawing styles when color or line width changes - without clearing the canvas
+    (0, react_1.useEffect)(() => {
+        const ctx = ctxRef.current;
+        if (!ctx)
+            return;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = lineWidth;
+        console.log('Updated drawing styles - color:', color, 'lineWidth:', lineWidth);
+    }, [color, lineWidth]);
     // Clear the canvas
     const clearCanvasFunc = (0, react_1.useCallback)(() => {
         const ctx = ctxRef.current;
@@ -100,14 +128,6 @@ function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = undefined, he
             handleRemoteDraw(remoteDrawData);
         }
     }, [remoteDrawData, handleRemoteDraw]);
-    // Update context when color or line width changes
-    (0, react_1.useEffect)(() => {
-        const ctx = ctxRef.current;
-        if (!ctx)
-            return;
-        ctx.strokeStyle = color;
-        ctx.lineWidth = lineWidth;
-    }, [color, lineWidth]);
     // Setup mouse events
     (0, react_1.useEffect)(() => {
         const canvas = canvasRef.current;
