@@ -15,10 +15,32 @@ function setupSocketServer(server) {
         cors: {
             origin: '*',
             methods: ['GET', 'POST']
-        }
+        },
+        transports: ['websocket', 'polling'],
+        pingTimeout: 60000,
+        pingInterval: 25000,
+        connectTimeout: 45000
+    });
+    // Track metrics for debugging
+    const connectionCount = {
+        total: 0,
+        active: 0,
+        disconnected: 0
+    };
+    // Better connection logging
+    io.engine.on('connection_error', (err) => {
+        console.error('Socket.IO connection error:', err);
     });
     io.on('connection', (socket) => {
-        console.log('New client connected', socket.id);
+        connectionCount.total++;
+        connectionCount.active++;
+        console.log(`New client connected: ${socket.id}`);
+        console.log(`Connection stats - Total: ${connectionCount.total}, Active: ${connectionCount.active}, Disconnected: ${connectionCount.disconnected}`);
+        console.log(`Socket handshake: ${JSON.stringify({
+            headers: socket.handshake.headers['user-agent'],
+            query: socket.handshake.query,
+            time: new Date().toISOString()
+        })}`);
         // Create or join a room
         socket.on('join-room', ({ roomId, playerName }) => {
             let room;
@@ -136,8 +158,11 @@ function setupSocketServer(server) {
             io.to(roomId).emit('canvas-cleared');
         });
         // Handle player disconnect
-        socket.on('disconnect', () => {
-            console.log('Client disconnected', socket.id);
+        socket.on('disconnect', (reason) => {
+            connectionCount.active--;
+            connectionCount.disconnected++;
+            console.log(`Client disconnected: ${socket.id}, Reason: ${reason}`);
+            console.log(`Connection stats - Total: ${connectionCount.total}, Active: ${connectionCount.active}, Disconnected: ${connectionCount.disconnected}`);
             // Find and remove player from any rooms
             for (const [roomId, room] of rooms.entries()) {
                 const playerIndex = room.players.findIndex(p => p.id === socket.id);

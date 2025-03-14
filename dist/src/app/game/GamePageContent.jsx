@@ -28,120 +28,11 @@ function GamePageContent() {
     const [timeLeft, setTimeLeft] = (0, react_1.useState)(0);
     const [wordOptions, setWordOptions] = (0, react_1.useState)([]);
     const [clearCanvas, setClearCanvas] = (0, react_1.useState)(false);
-    // Connect to socket and join/create room
-    (0, react_1.useEffect)(() => {
-        const socket = (0, socketClient_1.getSocket)();
-        // Join or create room
-        socket.emit('join-room', {
-            roomId: roomIdParam,
-            playerName
-        });
-        // Handle room joined
-        socket.on('room-joined', ({ roomId: joinedRoomId, playerId: joinedPlayerId }) => {
-            setRoomId(joinedRoomId);
-            setPlayerId(joinedPlayerId);
-            // Add system message
-            addSystemMessage(`You joined room ${joinedRoomId}`);
-        });
-        // Handle room updates
-        socket.on('room-update', (updatedRoom) => {
-            setRoom(updatedRoom);
-            // Check if current player is the drawer
-            const isCurrentPlayerDrawing = updatedRoom.currentDrawer === playerId;
-            setIsDrawing(isCurrentPlayerDrawing);
-        });
-        // Handle game started
-        socket.on('game-started', ({ currentRound, maxRounds }) => {
-            addSystemMessage(`Game started! ${currentRound} of ${maxRounds} rounds`);
-        });
-        // Handle new drawer
-        socket.on('new-drawer', ({ drawerId, drawerName, roundNumber }) => {
-            addSystemMessage(`Round ${roundNumber}: ${drawerName} is drawing now!`);
-            // Reset word-related state
-            setCurrentWord('');
-            setWordHint('');
-            // Clear canvas for everyone
-            setClearCanvas(true);
-        });
-        // Handle word options for drawer
-        socket.on('word-options', ({ options }) => {
-            setWordOptions(options);
-        });
-        // Handle word to draw (only for drawer)
-        socket.on('word-to-draw', ({ word }) => {
-            setCurrentWord(word);
-            addSystemMessage(`Your word to draw is: ${word}`);
-        });
-        // Handle round started
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        socket.on('round-started', ({ drawerId: _drawerId, wordLength }) => {
-            // Create word hint (e.g., "_ _ _ _" for a 4-letter word)
-            const hint = Array(wordLength).fill('_').join(' ');
-            setWordHint(hint);
-            if (_drawerId !== playerId) {
-                addSystemMessage(`Round started! Word has ${wordLength} letters`);
-            }
-        });
-        // Handle round timer
-        socket.on('round-timer-started', ({ duration }) => {
-            setTimeLeft(duration);
-            // Set up local timer
-            const timer = setInterval(() => {
-                setTimeLeft((prev) => {
-                    if (prev <= 1) {
-                        clearInterval(timer);
-                        return 0;
-                    }
-                    return prev - 1;
-                });
-            }, 1000);
-            return () => clearInterval(timer);
-        });
-        // Handle round ended
-        socket.on('round-ended', ({ word }) => {
-            addSystemMessage(`Round ended! The word was: ${word}`);
-        });
-        // Handle game ended
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        socket.on('game-ended', ({ players: _players, winner }) => {
-            addSystemMessage(`Game ended! Winner: ${winner.name} with ${winner.score} points`);
-        });
-        // Handle player guessed
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        socket.on('player-guessed', ({ playerId: guesserId, playerName: guesserName }) => {
-            addSystemMessage(`${guesserName} guessed the word!`, false, true);
-        });
-        // Handle word guessed by current player
-        socket.on('word-guessed', ({ word }) => {
-            addSystemMessage(`You guessed the word: ${word}!`, false, true);
-        });
-        // Handle chat messages
-        socket.on('chat-update', ({ playerId, playerName, message }) => {
-            addMessage(playerId, playerName, message);
-        });
-        // Handle drawing updates
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        socket.on('draw-update', (drawData) => {
-            // This will be handled by the Canvas component
-            // The drawData is used by the Canvas component through props
-        });
-        // Handle canvas cleared
-        socket.on('canvas-cleared', () => {
-            setClearCanvas(true);
-        });
-        // Clean up on unmount
-        return () => {
-            (0, socketClient_1.disconnectSocket)();
-        };
-    }, [playerName, roomIdParam, playerId]);
-    // Reset clearCanvas flag after it's been used
-    (0, react_1.useEffect)(() => {
-        if (clearCanvas) {
-            setTimeout(() => setClearCanvas(false), 100);
-        }
-    }, [clearCanvas]);
+    // Socket reference to maintain across renders
+    const socketRef = (0, react_1.useRef)(null);
+    // Define message handlers first so they can be referenced in the dependency array
     // Helper to add a message to the chat
-    const addMessage = (playerId, playerName, content) => {
+    const addMessage = (0, react_1.useCallback)((playerId, playerName, content) => {
         setMessages((prev) => [
             ...prev,
             {
@@ -151,9 +42,9 @@ function GamePageContent() {
                 content
             }
         ]);
-    };
+    }, []);
     // Helper to add a system message
-    const addSystemMessage = (content, isSystem = true, isCorrectGuess = false) => {
+    const addSystemMessage = (0, react_1.useCallback)((content, isSystem = true, isCorrectGuess = false) => {
         setMessages((prev) => [
             ...prev,
             {
@@ -165,45 +56,175 @@ function GamePageContent() {
                 isCorrectGuess
             }
         ]);
-    };
-    // Handle sending chat messages
-    const handleSendMessage = (message) => {
-        if (!roomId || !playerId)
+    }, []);
+    // Connect to socket and join/create room - only on initial mount
+    (0, react_1.useEffect)(() => {
+        console.log('GamePageContent mounted - initializing socket connection');
+        // Only create a socket if we don't already have one
+        if (!socketRef.current) {
+            const socket = (0, socketClient_1.getSocket)();
+            socketRef.current = socket;
+            if (!socket) {
+                console.error('Failed to create socket connection');
+                addSystemMessage('Error: Could not connect to game server');
+                return () => { };
+            }
+            // Join or create room
+            socket.emit('join-room', {
+                roomId: roomIdParam,
+                playerName
+            });
+        }
+        // Clean up on unmount
+        return () => {
+            console.log('GamePageContent unmounting - disconnecting socket');
+            (0, socketClient_1.disconnectSocket)();
+            socketRef.current = null;
+        };
+    }, [addSystemMessage, playerName, roomIdParam]); // Add addSystemMessage to dependency array
+    // Set up socket event listeners - these can update when playerId changes
+    (0, react_1.useEffect)(() => {
+        const socket = socketRef.current;
+        if (!socket)
             return;
-        const socket = (0, socketClient_1.getSocket)();
-        socket.emit('chat-message', {
+        console.log('Setting up socket event listeners');
+        // Handle room joined
+        const handleRoomJoined = ({ roomId: joinedRoomId, playerId: joinedPlayerId }) => {
+            setRoomId(joinedRoomId);
+            setPlayerId(joinedPlayerId);
+            // Add system message
+            addSystemMessage(`You joined room ${joinedRoomId}`);
+        };
+        // Handle room updates
+        const handleRoomUpdate = (updatedRoom) => {
+            setRoom(updatedRoom);
+            // Check if current player is the drawer
+            const isCurrentPlayerDrawing = updatedRoom.currentDrawer === playerId;
+            setIsDrawing(isCurrentPlayerDrawing);
+        };
+        // Handle game started
+        const handleGameStarted = ({ currentRound, maxRounds }) => {
+            addSystemMessage(`Game started! ${currentRound} of ${maxRounds} rounds`);
+        };
+        // Handle new drawer
+        const handleNewDrawer = ({ drawerId, drawerName, roundNumber }) => {
+            addSystemMessage(`Round ${roundNumber}: ${drawerName} is drawing now!`);
+            // Reset word-related state
+            setCurrentWord('');
+            setWordHint('');
+            // Clear canvas for everyone
+            setClearCanvas(true);
+        };
+        // Register all event listeners
+        socket.on('room-joined', handleRoomJoined);
+        socket.on('room-update', handleRoomUpdate);
+        socket.on('game-started', handleGameStarted);
+        socket.on('new-drawer', handleNewDrawer);
+        socket.on('word-options', ({ options }) => setWordOptions(options));
+        socket.on('word-to-draw', ({ word }) => {
+            setCurrentWord(word);
+            addSystemMessage(`Your word to draw is: ${word}`);
+        });
+        // Handle round started
+        socket.on('round-started', ({ drawerId: _drawerId, wordLength }) => {
+            // Create word hint (e.g., "_ _ _ _" for a 4-letter word)
+            const hint = Array(wordLength).fill('_').join(' ');
+            setWordHint(hint);
+            if (_drawerId !== playerId) {
+                addSystemMessage(`Round started! Word has ${wordLength} letters`);
+            }
+        });
+        socket.on('round-timer-started', ({ duration }) => {
+            setTimeLeft(duration);
+        });
+        socket.on('round-ended', ({ word }) => {
+            addSystemMessage(`Round ended! The word was: ${word}`);
+        });
+        socket.on('game-ended', ({ players: _players, winner }) => {
+            addSystemMessage(`Game ended! Winner: ${winner.name} with ${winner.score} points`);
+        });
+        socket.on('player-guessed', ({ playerId: guesserId, playerName: guesserName }) => {
+            addSystemMessage(`${guesserName} guessed the word!`, false, true);
+        });
+        socket.on('word-guessed', ({ word }) => {
+            addSystemMessage(`You guessed the word: ${word}!`, false, true);
+        });
+        socket.on('chat-update', ({ playerId, playerName, message }) => {
+            addMessage(playerId, playerName, message);
+        });
+        socket.on('canvas-cleared', () => {
+            setClearCanvas(true);
+        });
+        // Clean up event listeners when dependency changes
+        return () => {
+            console.log('Removing socket event listeners');
+            socket.off('room-joined', handleRoomJoined);
+            socket.off('room-update', handleRoomUpdate);
+            socket.off('game-started', handleGameStarted);
+            socket.off('new-drawer', handleNewDrawer);
+            socket.off('word-options');
+            socket.off('word-to-draw');
+            socket.off('round-started');
+            socket.off('round-timer-started');
+            socket.off('round-ended');
+            socket.off('game-ended');
+            socket.off('player-guessed');
+            socket.off('word-guessed');
+            socket.off('chat-update');
+            socket.off('canvas-cleared');
+        };
+    }, [playerId, addSystemMessage, addMessage]);
+    // Set up local timer when timeLeft changes
+    (0, react_1.useEffect)(() => {
+        if (timeLeft <= 0)
+            return;
+        const timer = setInterval(() => {
+            setTimeLeft((prev) => {
+                if (prev <= 1) {
+                    clearInterval(timer);
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+        return () => clearInterval(timer);
+    }, [timeLeft]);
+    // Reset clearCanvas flag after it's been used
+    (0, react_1.useEffect)(() => {
+        if (clearCanvas) {
+            setTimeout(() => setClearCanvas(false), 100);
+        }
+    }, [clearCanvas]);
+    // Update these functions to use the socket reference
+    const handleSendMessage = (message) => {
+        if (!roomId || !playerId || !socketRef.current)
+            return;
+        socketRef.current.emit('chat-message', {
             roomId,
             message,
             playerId
         });
     };
-    // Handle drawing
     const handleDraw = (drawData) => {
-        if (!roomId || !isDrawing)
+        if (!roomId || !isDrawing || !socketRef.current)
             return;
-        const socket = (0, socketClient_1.getSocket)();
-        socket.emit('draw', {
+        socketRef.current.emit('draw', {
             roomId,
             drawData
         });
     };
-    // Handle clearing canvas
     const handleClearCanvas = () => {
-        if (!roomId || !isDrawing)
+        if (!roomId || !isDrawing || !socketRef.current)
             return;
-        const socket = (0, socketClient_1.getSocket)();
-        socket.emit('clear-canvas', { roomId });
+        socketRef.current.emit('clear-canvas', { roomId });
     };
-    // Handle word selection
     const handleWordSelect = (word) => {
-        if (!roomId || !isDrawing)
+        if (!roomId || !socketRef.current)
             return;
-        const socket = (0, socketClient_1.getSocket)();
-        socket.emit('word-selected', {
+        socketRef.current.emit('word-selected', {
             roomId,
             word
         });
-        // Clear word options
         setWordOptions([]);
     };
     // Get current drawer info
