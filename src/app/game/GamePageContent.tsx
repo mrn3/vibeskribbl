@@ -107,6 +107,7 @@ export default function GamePageContent() {
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [wordOptions, setWordOptions] = useState<string[]>([]);
   const [clearCanvas, setClearCanvas] = useState<boolean>(false);
+  const [remoteDrawData, setRemoteDrawData] = useState<DrawData | undefined>(undefined);
   
   // Socket reference to maintain across renders
   const socketRef = useRef<Socket | null>(null);
@@ -212,6 +213,11 @@ export default function GamePageContent() {
       setClearCanvas(true);
     };
     
+    // Handle drawing updates from other users
+    socket.on('draw-update', (drawData: DrawData) => {
+      setRemoteDrawData(drawData);
+    });
+    
     // Register all event listeners
     socket.on('room-joined', handleRoomJoined);
     socket.on('room-update', handleRoomUpdate);
@@ -278,6 +284,7 @@ export default function GamePageContent() {
       socket.off('player-guessed');
       socket.off('word-guessed');
       socket.off('chat-update');
+      socket.off('draw-update');
       socket.off('canvas-cleared');
     };
   }, [playerId, addSystemMessage, addMessage]); 
@@ -404,6 +411,7 @@ export default function GamePageContent() {
               onDraw={handleDraw}
               onClear={handleClearCanvas}
               clearCanvas={clearCanvas}
+              remoteDrawData={remoteDrawData}
             />
           </div>
           

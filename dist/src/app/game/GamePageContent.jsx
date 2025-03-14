@@ -28,6 +28,7 @@ function GamePageContent() {
     const [timeLeft, setTimeLeft] = (0, react_1.useState)(0);
     const [wordOptions, setWordOptions] = (0, react_1.useState)([]);
     const [clearCanvas, setClearCanvas] = (0, react_1.useState)(false);
+    const [remoteDrawData, setRemoteDrawData] = (0, react_1.useState)(undefined);
     // Socket reference to maintain across renders
     const socketRef = (0, react_1.useRef)(null);
     // Define message handlers first so they can be referenced in the dependency array
@@ -115,6 +116,10 @@ function GamePageContent() {
             // Clear canvas for everyone
             setClearCanvas(true);
         };
+        // Handle drawing updates from other users
+        socket.on('draw-update', (drawData) => {
+            setRemoteDrawData(drawData);
+        });
         // Register all event listeners
         socket.on('room-joined', handleRoomJoined);
         socket.on('room-update', handleRoomUpdate);
@@ -171,6 +176,7 @@ function GamePageContent() {
             socket.off('player-guessed');
             socket.off('word-guessed');
             socket.off('chat-update');
+            socket.off('draw-update');
             socket.off('canvas-cleared');
         };
     }, [playerId, addSystemMessage, addMessage]);
@@ -270,7 +276,7 @@ function GamePageContent() {
           
           {/* Main game area */}
           <div className="lg:col-span-2">
-            <Canvas_1.default isDrawing={isDrawing} onDraw={handleDraw} onClear={handleClearCanvas} clearCanvas={clearCanvas}/>
+            <Canvas_1.default isDrawing={isDrawing} onDraw={handleDraw} onClear={handleClearCanvas} clearCanvas={clearCanvas} remoteDrawData={remoteDrawData}/>
           </div>
           
           {/* Chat */}

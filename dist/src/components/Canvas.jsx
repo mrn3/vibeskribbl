@@ -3,7 +3,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = Canvas;
 const react_1 = require("react");
-function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = 800, height = 600 }) {
+function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = 800, height = 600, remoteDrawData }) {
     const canvasRef = (0, react_1.useRef)(null);
     const [drawing, setDrawing] = (0, react_1.useState)(false);
     const [color, setColor] = (0, react_1.useState)('#000000');
@@ -18,9 +18,7 @@ function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = 800, height =
             return;
         ctx.clearRect(0, 0, width, height);
     }, [width, height]);
-    // This function would be used to handle draw events from other users
-    // through a socket connection in a real implementation
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    // This function is used to handle draw events from other users
     const handleRemoteDraw = (0, react_1.useCallback)((data) => {
         const canvas = canvasRef.current;
         if (!canvas)
@@ -44,6 +42,12 @@ function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = 800, height =
             ctx.closePath();
         }
     }, []);
+    // Process remote drawing data when it arrives
+    (0, react_1.useEffect)(() => {
+        if (remoteDrawData) {
+            handleRemoteDraw(remoteDrawData);
+        }
+    }, [remoteDrawData, handleRemoteDraw]);
     // Setup mouse events
     (0, react_1.useEffect)(() => {
         const canvas = canvasRef.current;
@@ -110,22 +114,89 @@ function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = 800, height =
         const handleMouseLeave = (e) => {
             handleMouseUp(e);
         };
+        // Add touch support
+        const handleTouchStart = (e) => {
+            if (!isDrawing)
+                return;
+            e.preventDefault();
+            setDrawing(true);
+            const rect = canvas.getBoundingClientRect();
+            const touch = e.touches[0];
+            const x = touch.clientX - rect.left;
+            const y = touch.clientY - rect.top;
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            onDraw({
+                type: 'start',
+                x,
+                y,
+                color,
+                lineWidth
+            });
+        };
+        const handleTouchMove = (e) => {
+            if (!drawing || !isDrawing)
+                return;
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const touch = e.touches[0];
+            const x = touch.clientX - rect.left;
+            const y = touch.clientY - rect.top;
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            onDraw({
+                type: 'draw',
+                x,
+                y,
+                color,
+                lineWidth
+            });
+        };
+        const handleTouchEnd = (e) => {
+            if (!drawing || !isDrawing)
+                return;
+            e.preventDefault();
+            setDrawing(false);
+            const rect = canvas.getBoundingClientRect();
+            // Use the last known touch position
+            const touches = e.changedTouches;
+            if (touches.length > 0) {
+                const touch = touches[0];
+                const x = touch.clientX - rect.left;
+                const y = touch.clientY - rect.top;
+                ctx.lineTo(x, y);
+                ctx.stroke();
+                ctx.closePath();
+                onDraw({
+                    type: 'end',
+                    x,
+                    y,
+                    color,
+                    lineWidth
+                });
+            }
+        };
+        // Add mouse event listeners
         canvas.addEventListener('mousedown', handleMouseDown);
         canvas.addEventListener('mousemove', handleMouseMove);
         canvas.addEventListener('mouseup', handleMouseUp);
         canvas.addEventListener('mouseleave', handleMouseLeave);
+        // Add touch event listeners
+        canvas.addEventListener('touchstart', handleTouchStart);
+        canvas.addEventListener('touchmove', handleTouchMove);
+        canvas.addEventListener('touchend', handleTouchEnd);
         return () => {
+            // Remove mouse event listeners
             canvas.removeEventListener('mousedown', handleMouseDown);
             canvas.removeEventListener('mousemove', handleMouseMove);
             canvas.removeEventListener('mouseup', handleMouseUp);
             canvas.removeEventListener('mouseleave', handleMouseLeave);
+            // Remove touch event listeners
+            canvas.removeEventListener('touchstart', handleTouchStart);
+            canvas.removeEventListener('touchmove', handleTouchMove);
+            canvas.removeEventListener('touchend', handleTouchEnd);
         };
     }, [drawing, isDrawing, color, lineWidth, onDraw]);
-    // Handle external draw events
-    (0, react_1.useEffect)(() => {
-        // This is where we handle drawing data from other users
-        return () => { };
-    }, []);
     // Handle clear canvas signal
     (0, react_1.useEffect)(() => {
         if (clearCanvas) {
