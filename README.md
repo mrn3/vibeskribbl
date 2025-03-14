@@ -27,7 +27,7 @@ A fun multiplayer drawing and guessing game inspired by Skribbl.io, built with N
 
 1. Clone the repository
 ```bash
-git clone https://github.com/yourusername/vibeskribbl.git
+git clone https://github.com/mrn3/vibeskribbl.git
 cd vibeskribbl
 ```
 

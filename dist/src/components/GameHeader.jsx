@@ -22,22 +22,22 @@ function GameHeader({ round, maxRounds, timeLeft, drawer, word, wordHint, isDraw
     }, [timeLeft]);
     return (<div className="bg-white rounded-lg shadow-md p-4 mb-4">
       <div className="flex justify-between items-center mb-3">
-        <div className="text-lg font-bold">
+        <div className="text-lg font-bold text-gray-900">
           Round {round} of {maxRounds}
         </div>
         
-        <div className={`text-xl font-bold px-4 py-2 rounded-lg ${timer <= 10 ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>
+        <div className={`text-xl font-bold px-4 py-2 rounded-lg ${timer <= 10 ? 'bg-red-200 text-red-800' : 'bg-blue-200 text-blue-800'}`}>
           {timer}s
         </div>
       </div>
       
       <div className="flex justify-between items-center">
-        <div className="font-medium">
-          {drawer && (isDrawer ? (<span>You are drawing now!</span>) : (<span><b>{drawer.name}</b> is drawing</span>))}
+        <div className="font-medium text-gray-900">
+          {drawer && (isDrawer ? (<span>You are drawing now!</span>) : (<span><b className="text-black">{drawer.name}</b> is drawing</span>))}
         </div>
         
         <div className="text-lg font-bold tracking-wider">
-          {isDrawer && word ? (<span className="text-green-600">{word}</span>) : (<span>{wordHint || ''}</span>)}
+          {isDrawer && word ? (<span className="text-green-700">{word}</span>) : (<span className="text-gray-900">{wordHint || ''}</span>)}
         </div>
       </div>
     </div>);

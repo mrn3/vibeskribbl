@@ -24,3 +24,26 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Add default text colors for better visibility */
+h1, h2, h3, h4, h5, h6 {
+  color: #171717;
+}
+
+p, span, div {
+  color: #333333;
+}
+
+/* Force text colors in common UI elements */
+.text-default {
+  color: #333333 !important;
+}
+
+.text-heading {
+  color: #171717 !important;
+}
+
+/* Ensure input text is visible */
+input, textarea, select {
+  color: #000000;
+}
