@@ -41,10 +41,8 @@ function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = undefined, he
             return;
         // Set canvas resolution to match display size
         const dpr = window.devicePixelRatio || 1;
-        canvas.width = canvasSize.width * dpr;
-        canvas.height = canvasSize.height * dpr;
-        // Scale all drawing operations
-        ctx.scale(dpr, dpr);
+        canvas.width = canvasSize.width;
+        canvas.height = canvasSize.height;
         // Set canvas display size
         canvas.style.width = `${canvasSize.width}px`;
         canvas.style.height = `${canvasSize.height}px`;
@@ -78,16 +76,19 @@ function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = undefined, he
         console.log('Handling remote draw:', data.type, data.x, data.y);
         ctx.strokeStyle = data.color;
         ctx.lineWidth = data.lineWidth;
+        // Ensure coordinates are in the correct scale
+        const x = data.x;
+        const y = data.y;
         if (data.type === 'start') {
             ctx.beginPath();
-            ctx.moveTo(data.x, data.y);
+            ctx.moveTo(x, y);
         }
         else if (data.type === 'draw') {
-            ctx.lineTo(data.x, data.y);
+            ctx.lineTo(x, y);
             ctx.stroke();
         }
         else if (data.type === 'end') {
-            ctx.lineTo(data.x, data.y);
+            ctx.lineTo(x, y);
             ctx.stroke();
             ctx.closePath();
         }
@@ -119,6 +120,8 @@ function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = undefined, he
             console.error('Canvas context is null');
             return;
         }
+        // Calculate the device pixel ratio once
+        const dpr = window.devicePixelRatio || 1;
         const handleMouseDown = (e) => {
             if (!isDrawing) {
                 console.log('Mouse down but not allowed to draw', { isDrawing });
@@ -127,10 +130,10 @@ function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = undefined, he
             console.log('Mouse down - starting to draw', { isDrawing, drawing });
             setDrawing(true);
             const rect = canvas.getBoundingClientRect();
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
-            const x = (e.clientX - rect.left) / scaleX;
-            const y = (e.clientY - rect.top) / scaleY;
+            // Account for scaling properly by considering the display size
+            // and the actual canvas style size
+            const x = (e.clientX - rect.left) * (canvasSize.width / rect.width);
+            const y = (e.clientY - rect.top) * (canvasSize.height / rect.height);
             ctx.beginPath();
             ctx.moveTo(x, y);
             onDraw({
@@ -146,10 +149,9 @@ function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = undefined, he
                 return;
             console.log('Mouse move - drawing');
             const rect = canvas.getBoundingClientRect();
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
-            const x = (e.clientX - rect.left) / scaleX;
-            const y = (e.clientY - rect.top) / scaleY;
+            // Account for scaling properly
+            const x = (e.clientX - rect.left) * (canvasSize.width / rect.width);
+            const y = (e.clientY - rect.top) * (canvasSize.height / rect.height);
             ctx.lineTo(x, y);
             ctx.stroke();
             onDraw({
@@ -166,10 +168,9 @@ function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = undefined, he
             console.log('Mouse up - ending draw');
             setDrawing(false);
             const rect = canvas.getBoundingClientRect();
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
-            const x = (e.clientX - rect.left) / scaleX;
-            const y = (e.clientY - rect.top) / scaleY;
+            // Account for scaling properly
+            const x = (e.clientX - rect.left) * (canvasSize.width / rect.width);
+            const y = (e.clientY - rect.top) * (canvasSize.height / rect.height);
             ctx.lineTo(x, y);
             ctx.stroke();
             ctx.closePath();
@@ -186,7 +187,7 @@ function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = undefined, he
                 handleMouseUp(e);
             }
         };
-        // Add touch support
+        // Add touch support with the same coordinate calculation fix
         const handleTouchStart = (e) => {
             if (!isDrawing)
                 return;
@@ -194,11 +195,10 @@ function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = undefined, he
             console.log('Touch start - starting to draw');
             setDrawing(true);
             const rect = canvas.getBoundingClientRect();
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
             const touch = e.touches[0];
-            const x = (touch.clientX - rect.left) / scaleX;
-            const y = (touch.clientY - rect.top) / scaleY;
+            // Account for scaling properly
+            const x = (touch.clientX - rect.left) * (canvasSize.width / rect.width);
+            const y = (touch.clientY - rect.top) * (canvasSize.height / rect.height);
             ctx.beginPath();
             ctx.moveTo(x, y);
             onDraw({
@@ -215,11 +215,10 @@ function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = undefined, he
             e.preventDefault();
             console.log('Touch move - drawing');
             const rect = canvas.getBoundingClientRect();
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
             const touch = e.touches[0];
-            const x = (touch.clientX - rect.left) / scaleX;
-            const y = (touch.clientY - rect.top) / scaleY;
+            // Account for scaling properly
+            const x = (touch.clientX - rect.left) * (canvasSize.width / rect.width);
+            const y = (touch.clientY - rect.top) * (canvasSize.height / rect.height);
             ctx.lineTo(x, y);
             ctx.stroke();
             onDraw({
@@ -237,14 +236,13 @@ function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = undefined, he
             console.log('Touch end - ending draw');
             setDrawing(false);
             const rect = canvas.getBoundingClientRect();
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
             // Use the last known touch position
             const touches = e.changedTouches;
             if (touches.length > 0) {
                 const touch = touches[0];
-                const x = (touch.clientX - rect.left) / scaleX;
-                const y = (touch.clientY - rect.top) / scaleY;
+                // Account for scaling properly
+                const x = (touch.clientX - rect.left) * (canvasSize.width / rect.width);
+                const y = (touch.clientY - rect.top) * (canvasSize.height / rect.height);
                 ctx.lineTo(x, y);
                 ctx.stroke();
                 ctx.closePath();
