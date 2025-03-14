@@ -201,12 +201,32 @@ Round: ${room.currentRound}/${room.maxRounds}`;
         return;
       }
 
+      // Debug command to show all player states
+      if (message === '/players') {
+        const playersInfo = room.players.map(p => 
+          `${p.name}: score=${p.score}, drawing=${p.isDrawing}, guessed=${p.hasGuessedCorrectly || false}`
+        ).join('\n');
+        
+        socket.emit('chat-update', {
+          playerId: 'system',
+          playerName: 'System',
+          message: `Players in room:\n${playersInfo}`
+        });
+        return;
+      }
+
       // Check if message is the correct word
       if (room.gameState === 'playing' && room.currentWord) {
         console.log(`Checking guess: "${message.toLowerCase()}" against word "${room.currentWord.toLowerCase()}" by ${player.name}`);
+        console.log(`Game state: ${room.gameState}, Current word: ${room.currentWord}, Player is drawer: ${player.id === room.currentDrawer}`);
         
-        if (message.toLowerCase() === room.currentWord.toLowerCase() &&
-            player.id !== room.currentDrawer) {
+        // Check if the guess matches the word exactly (case insensitive)
+        const guessMatches = message.toLowerCase() === room.currentWord.toLowerCase();
+        const playerIsNotDrawer = player.id !== room.currentDrawer;
+
+        console.log(`Guess matches: ${guessMatches}, Player is not drawer: ${playerIsNotDrawer}`);
+        
+        if (guessMatches && playerIsNotDrawer) {
           // Player guessed correctly
           console.log(`CORRECT GUESS by ${player.name}!`);
           player.score += 100;
@@ -216,6 +236,7 @@ Round: ${room.currentRound}/${room.maxRounds}`;
           socket.join(`${roomId}-guessed`);
           
           console.log(`Player ${player.name} guessed the word: ${room.currentWord}`);
+          console.log(`Updated player state: ${JSON.stringify(player)}`);
           
           // Notify everyone
           io.to(roomId).emit('player-guessed', { playerId: player.id, playerName: player.name });
@@ -228,10 +249,23 @@ Round: ${room.currentRound}/${room.maxRounds}`;
           const nonDrawingPlayers = room.players.filter(p => p.id !== room.currentDrawer);
           const allGuessed = nonDrawingPlayers.every(p => p.hasGuessedCorrectly);
           
+          console.log(`Non-drawing players: ${nonDrawingPlayers.length}, All guessed: ${allGuessed}`);
+          
           if (allGuessed) {
             console.log('All players have guessed the word, moving to next round');
-            // Move to next round
-            nextRound(io, room);
+            
+            // Notify all players about moving to next round
+            io.to(roomId).emit('chat-update', {
+              playerId: 'system',
+              playerName: 'System',
+              message: `All players guessed the word! Next round starting in 3 seconds...`
+            });
+            
+            // Delay before starting next round to give time for celebration
+            setTimeout(() => {
+              // Move to next round after delay
+              nextRound(io, room);
+            }, 3000); // 3 second delay
           }
           
           // Don't emit this as a regular chat message
@@ -261,8 +295,14 @@ Round: ${room.currentRound}/${room.maxRounds}`;
       const room = rooms.get(roomId);
       if (!room || room.currentDrawer !== socket.id) return;
 
+      console.log(`Drawer ${socket.id} selected word: ${word}`);
+      
+      // Update room state with the word and change game state to playing
       room.currentWord = word;
       room.wordOptions = undefined;
+      room.gameState = 'playing'; // Ensure game state is set to playing
+      
+      console.log(`Game state changed to: ${room.gameState}`);
       
       // Notify everyone that word was selected
       io.to(roomId).emit('round-started', {
@@ -272,6 +312,9 @@ Round: ${room.currentRound}/${room.maxRounds}`;
       
       // Send the actual word to the drawer
       socket.emit('word-to-draw', { word });
+      
+      // Send updated room to everyone
+      io.to(roomId).emit('room-update', room);
       
       // Start round timer
       startRoundTimer(io, room);
@@ -454,10 +497,22 @@ function startRoundTimer(io: SocketIOServer, room: Room) {
   // Simulate a timer ending after roundTime seconds
   setTimeout(() => {
     if (rooms.has(room.id) && room.gameState === 'playing') {
+      // Announce that time is up
       io.to(room.id).emit('round-ended', { 
         word: room.currentWord
       });
-      nextRound(io, room);
+      
+      // Notify players about the delay before next round
+      io.to(room.id).emit('chat-update', {
+        playerId: 'system',
+        playerName: 'System',
+        message: `Time's up! The word was "${room.currentWord}". Next round starting in 3 seconds...`
+      });
+      
+      // Add delay before starting next round
+      setTimeout(() => {
+        nextRound(io, room);
+      }, 3000); // 3 second delay
     }
   }, room.roundTime * 1000);
 }
