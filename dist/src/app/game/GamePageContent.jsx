@@ -298,20 +298,24 @@ function GamePageContent() {
         {/* Game header with round info */}
         <GameHeader_1.default round={room.currentRound} maxRounds={room.maxRounds} timeLeft={timeLeft} drawer={getCurrentDrawer()} word={currentWord} wordHint={wordHint} isDrawer={isDrawing}/>
         
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
           {/* Player list */}
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-3">
             <PlayerList_1.default players={room.players} currentPlayerId={playerId}/>
           </div>
           
           {/* Main game area */}
-          <div className="lg:col-span-2">
-            <Canvas_1.default isDrawing={isDrawing} onDraw={handleDraw} onClear={handleClearCanvas} clearCanvas={clearCanvas} remoteDrawData={remoteDrawData}/>
+          <div className="lg:col-span-6">
+            <Canvas_1.default isDrawing={isDrawing} onDraw={handleDraw} onClear={handleClearCanvas} clearCanvas={clearCanvas} remoteDrawData={remoteDrawData} width={undefined} // Let canvas be responsive
+     height={undefined} // Let canvas be responsive
+    />
           </div>
           
           {/* Chat */}
-          <div className="lg:col-span-1 h-[600px]">
-            <Chat_1.default playerId={playerId} onSendMessage={handleSendMessage} messages={messages} disabled={isDrawing} placeholder={isDrawing ? "You're drawing! Can't chat now." : "Type your guess here..."}/>
+          <div className="lg:col-span-3">
+            <div className="h-full max-h-[calc(100vh-200px)]">
+              <Chat_1.default playerId={playerId} onSendMessage={handleSendMessage} messages={messages} disabled={isDrawing} placeholder={isDrawing ? "You're drawing! Can't chat now." : "Type your guess here..."}/>
+            </div>
           </div>
         </div>
       </div>

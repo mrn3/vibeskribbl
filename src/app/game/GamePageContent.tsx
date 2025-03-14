@@ -434,32 +434,36 @@ export default function GamePageContent() {
           isDrawer={isDrawing}
         />
         
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
           {/* Player list */}
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-3">
             <PlayerList players={room.players} currentPlayerId={playerId} />
           </div>
           
           {/* Main game area */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-6">
             <Canvas
               isDrawing={isDrawing}
               onDraw={handleDraw}
               onClear={handleClearCanvas}
               clearCanvas={clearCanvas}
               remoteDrawData={remoteDrawData}
+              width={undefined}  // Let canvas be responsive
+              height={undefined}  // Let canvas be responsive
             />
           </div>
           
           {/* Chat */}
-          <div className="lg:col-span-1 h-[600px]">
-            <Chat
-              playerId={playerId}
-              onSendMessage={handleSendMessage}
-              messages={messages}
-              disabled={isDrawing}
-              placeholder={isDrawing ? "You're drawing! Can't chat now." : "Type your guess here..."}
-            />
+          <div className="lg:col-span-3">
+            <div className="h-full max-h-[calc(100vh-200px)]">
+              <Chat
+                playerId={playerId}
+                onSendMessage={handleSendMessage}
+                messages={messages}
+                disabled={isDrawing}
+                placeholder={isDrawing ? "You're drawing! Can't chat now." : "Type your guess here..."}
+              />
+            </div>
           </div>
         </div>
       </div>

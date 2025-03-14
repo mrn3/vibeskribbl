@@ -7,8 +7,8 @@ interface CanvasProps {
   onDraw: (data: DrawData) => void;
   onClear: () => void;
   clearCanvas: boolean;
-  width?: number;
-  height?: number;
+  width?: number | undefined;
+  height?: number | undefined;
   remoteDrawData?: DrawData;
 }
 
@@ -25,8 +25,8 @@ export default function Canvas({
   onDraw, 
   onClear,
   clearCanvas, 
-  width = 800, 
-  height = 600,
+  width = undefined, 
+  height = undefined,
   remoteDrawData
 }: CanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -34,8 +34,31 @@ export default function Canvas({
   const [drawing, setDrawing] = useState<boolean>(false);
   const [color, setColor] = useState<string>('#000000');
   const [lineWidth, setLineWidth] = useState<number>(5);
+  const [canvasSize, setCanvasSize] = useState({ width: width || 800, height: height || 600 });
+  const containerRef = useRef<HTMLDivElement>(null);
   
-  console.log('Canvas rendered with isDrawing:', isDrawing);
+  // Handle responsive sizing
+  useEffect(() => {
+    if (!width || !height) {
+      const handleResize = () => {
+        if (containerRef.current) {
+          const containerWidth = containerRef.current.clientWidth;
+          // Set canvas dimensions based on container width
+          // Maintain 4:3 aspect ratio
+          setCanvasSize({
+            width: containerWidth - 24, // Subtract padding
+            height: (containerWidth - 24) * 0.75
+          });
+        }
+      };
+      
+      handleResize(); // Initial sizing
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }
+  }, [width, height]);
+  
+  console.log('Canvas rendered with isDrawing:', isDrawing, 'size:', canvasSize);
   
   // Initialize canvas context
   useEffect(() => {
@@ -47,15 +70,15 @@ export default function Canvas({
     
     // Set canvas resolution to match display size
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = width * dpr;
-    canvas.height = height * dpr;
+    canvas.width = canvasSize.width * dpr;
+    canvas.height = canvasSize.height * dpr;
     
     // Scale all drawing operations
     ctx.scale(dpr, dpr);
     
     // Set canvas display size
-    canvas.style.width = `${width}px`;
-    canvas.style.height = `${height}px`;
+    canvas.style.width = `${canvasSize.width}px`;
+    canvas.style.height = `${canvasSize.height}px`;
     
     // Set drawing styles
     ctx.lineCap = 'round';
@@ -66,8 +89,8 @@ export default function Canvas({
     // Store context for later use
     ctxRef.current = ctx;
     
-    console.log('Canvas initialized with context');
-  }, [width, height, color, lineWidth]);
+    console.log('Canvas initialized with context, size:', canvasSize);
+  }, [canvasSize.width, canvasSize.height, color, lineWidth]);
   
   // Clear the canvas
   const clearCanvasFunc = useCallback(() => {
@@ -80,8 +103,8 @@ export default function Canvas({
     }
     
     console.log('Clearing canvas');
-    ctx.clearRect(0, 0, width, height);
-  }, [width, height]);
+    ctx.clearRect(0, 0, canvasSize.width, canvasSize.height);
+  }, [canvasSize.width, canvasSize.height]);
   
   // This function is used to handle draw events from other users
   const handleRemoteDraw = useCallback((data: DrawData) => {
@@ -359,11 +382,15 @@ export default function Canvas({
   const lineWidthOptions = [2, 5, 10, 15, 20];
   
   return (
-    <div className="flex flex-col items-center">
-      <div className="mb-4 p-2 bg-white rounded shadow-md">
+    <div className="flex flex-col items-center w-full" ref={containerRef}>
+      <div className="mb-4 p-2 bg-white rounded shadow-md w-full flex justify-center">
         <canvas
           ref={canvasRef}
-          style={{width: `${width}px`, height: `${height}px`}}
+          style={{
+            width: `${canvasSize.width}px`, 
+            height: `${canvasSize.height}px`,
+            maxWidth: '100%'
+          }}
           className="border border-gray-300 bg-white cursor-crosshair"
         />
       </div>
