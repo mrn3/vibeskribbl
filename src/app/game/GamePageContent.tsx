@@ -141,6 +141,12 @@ export default function GamePageContent() {
     ]);
   }, []);
   
+  // Handle drawing events from remote users
+  const handleDrawEvent = useCallback((data: DrawData) => {
+    console.log('Received draw event from server:', data.type);
+    setRemoteDrawData(data);
+  }, []);
+  
   // Connect to socket and join/create room - only on initial mount
   useEffect(() => {
     console.log('GamePageContent mounted - initializing socket connection');
@@ -193,6 +199,15 @@ export default function GamePageContent() {
       
       // Check if current player is the drawer
       const isCurrentPlayerDrawing = updatedRoom.currentDrawer === playerId;
+      console.log('Room update received:', {
+        roomId: updatedRoom.id,
+        currentDrawer: updatedRoom.currentDrawer,
+        playerId,
+        isCurrentPlayerDrawing,
+        gameState: updatedRoom.gameState,
+        players: updatedRoom.players.map(p => ({ id: p.id, name: p.name, isDrawing: p.isDrawing }))
+      });
+      
       setIsDrawing(isCurrentPlayerDrawing);
     };
     
@@ -205,6 +220,18 @@ export default function GamePageContent() {
     const handleNewDrawer = ({ drawerId, drawerName, roundNumber }: NewDrawerData) => {
       addSystemMessage(`Round ${roundNumber}: ${drawerName} is drawing now!`);
       
+      console.log('New drawer assigned:', {
+        drawerId,
+        drawerName,
+        roundNumber,
+        currentPlayerId: playerId,
+        isCurrentPlayerDrawing: drawerId === playerId
+      });
+      
+      // Explicitly update drawing state
+      const isCurrentPlayerDrawing = drawerId === playerId;
+      setIsDrawing(isCurrentPlayerDrawing);
+      
       // Reset word-related state
       setCurrentWord('');
       setWordHint('');
@@ -214,9 +241,7 @@ export default function GamePageContent() {
     };
     
     // Handle drawing updates from other users
-    socket.on('draw-update', (drawData: DrawData) => {
-      setRemoteDrawData(drawData);
-    });
+    socket.on('draw-update', handleDrawEvent);
     
     // Register all event listeners
     socket.on('room-joined', handleRoomJoined);
@@ -227,6 +252,10 @@ export default function GamePageContent() {
     socket.on('word-to-draw', ({ word }: WordToDrawData) => {
       setCurrentWord(word);
       addSystemMessage(`Your word to draw is: ${word}`);
+      
+      // If we're receiving a word to draw, we MUST be the drawer
+      console.log('Received word to draw, setting drawing mode to TRUE');
+      setIsDrawing(true);
     });
     
     // Handle round started
@@ -287,7 +316,7 @@ export default function GamePageContent() {
       socket.off('draw-update');
       socket.off('canvas-cleared');
     };
-  }, [playerId, addSystemMessage, addMessage]); 
+  }, [playerId, addSystemMessage, addMessage, handleDrawEvent]); 
   
   // Set up local timer when timeLeft changes
   useEffect(() => {
@@ -324,20 +353,27 @@ export default function GamePageContent() {
     });
   };
   
-  const handleDraw = (drawData: DrawData) => {
-    if (!roomId || !isDrawing || !socketRef.current) return;
+  // Handle drawing from local user
+  const handleDraw = useCallback((drawData: DrawData) => {
+    if (!roomId || !isDrawing || !socketRef.current) {
+      console.log('Cannot emit draw event - not drawing or no socket connection');
+      return;
+    }
     
+    console.log('Emitting draw event to server:', drawData.type);
     socketRef.current.emit('draw', {
       roomId,
       drawData
     });
-  };
+  }, [roomId, isDrawing]);
   
-  const handleClearCanvas = () => {
+  // Handle canvas clearing
+  const handleClearCanvas = useCallback(() => {
     if (!roomId || !isDrawing || !socketRef.current) return;
     
+    console.log('Emitting clear-canvas event to server');
     socketRef.current.emit('clear-canvas', { roomId });
-  };
+  }, [roomId, isDrawing]);
   
   const handleWordSelect = (word: string) => {
     if (!roomId || !socketRef.current) return;

@@ -58,6 +58,11 @@ function GamePageContent() {
             }
         ]);
     }, []);
+    // Handle drawing events from remote users
+    const handleDrawEvent = (0, react_1.useCallback)((data) => {
+        console.log('Received draw event from server:', data.type);
+        setRemoteDrawData(data);
+    }, []);
     // Connect to socket and join/create room - only on initial mount
     (0, react_1.useEffect)(() => {
         console.log('GamePageContent mounted - initializing socket connection');
@@ -101,6 +106,14 @@ function GamePageContent() {
             setRoom(updatedRoom);
             // Check if current player is the drawer
             const isCurrentPlayerDrawing = updatedRoom.currentDrawer === playerId;
+            console.log('Room update received:', {
+                roomId: updatedRoom.id,
+                currentDrawer: updatedRoom.currentDrawer,
+                playerId,
+                isCurrentPlayerDrawing,
+                gameState: updatedRoom.gameState,
+                players: updatedRoom.players.map(p => ({ id: p.id, name: p.name, isDrawing: p.isDrawing }))
+            });
             setIsDrawing(isCurrentPlayerDrawing);
         };
         // Handle game started
@@ -110,6 +123,16 @@ function GamePageContent() {
         // Handle new drawer
         const handleNewDrawer = ({ drawerId, drawerName, roundNumber }) => {
             addSystemMessage(`Round ${roundNumber}: ${drawerName} is drawing now!`);
+            console.log('New drawer assigned:', {
+                drawerId,
+                drawerName,
+                roundNumber,
+                currentPlayerId: playerId,
+                isCurrentPlayerDrawing: drawerId === playerId
+            });
+            // Explicitly update drawing state
+            const isCurrentPlayerDrawing = drawerId === playerId;
+            setIsDrawing(isCurrentPlayerDrawing);
             // Reset word-related state
             setCurrentWord('');
             setWordHint('');
@@ -117,9 +140,7 @@ function GamePageContent() {
             setClearCanvas(true);
         };
         // Handle drawing updates from other users
-        socket.on('draw-update', (drawData) => {
-            setRemoteDrawData(drawData);
-        });
+        socket.on('draw-update', handleDrawEvent);
         // Register all event listeners
         socket.on('room-joined', handleRoomJoined);
         socket.on('room-update', handleRoomUpdate);
@@ -129,6 +150,9 @@ function GamePageContent() {
         socket.on('word-to-draw', ({ word }) => {
             setCurrentWord(word);
             addSystemMessage(`Your word to draw is: ${word}`);
+            // If we're receiving a word to draw, we MUST be the drawer
+            console.log('Received word to draw, setting drawing mode to TRUE');
+            setIsDrawing(true);
         });
         // Handle round started
         socket.on('round-started', ({ drawerId: _drawerId, wordLength }) => {
@@ -179,7 +203,7 @@ function GamePageContent() {
             socket.off('draw-update');
             socket.off('canvas-cleared');
         };
-    }, [playerId, addSystemMessage, addMessage]);
+    }, [playerId, addSystemMessage, addMessage, handleDrawEvent]);
     // Set up local timer when timeLeft changes
     (0, react_1.useEffect)(() => {
         if (timeLeft <= 0)
@@ -211,19 +235,25 @@ function GamePageContent() {
             playerId
         });
     };
-    const handleDraw = (drawData) => {
-        if (!roomId || !isDrawing || !socketRef.current)
+    // Handle drawing from local user
+    const handleDraw = (0, react_1.useCallback)((drawData) => {
+        if (!roomId || !isDrawing || !socketRef.current) {
+            console.log('Cannot emit draw event - not drawing or no socket connection');
             return;
+        }
+        console.log('Emitting draw event to server:', drawData.type);
         socketRef.current.emit('draw', {
             roomId,
             drawData
         });
-    };
-    const handleClearCanvas = () => {
+    }, [roomId, isDrawing]);
+    // Handle canvas clearing
+    const handleClearCanvas = (0, react_1.useCallback)(() => {
         if (!roomId || !isDrawing || !socketRef.current)
             return;
+        console.log('Emitting clear-canvas event to server');
         socketRef.current.emit('clear-canvas', { roomId });
-    };
+    }, [roomId, isDrawing]);
     const handleWordSelect = (word) => {
         if (!roomId || !socketRef.current)
             return;

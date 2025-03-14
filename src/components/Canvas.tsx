@@ -30,28 +30,68 @@ export default function Canvas({
   remoteDrawData
 }: CanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
   const [drawing, setDrawing] = useState<boolean>(false);
   const [color, setColor] = useState<string>('#000000');
   const [lineWidth, setLineWidth] = useState<number>(5);
   
-  // Clear the canvas
-  const clearCanvasFunc = useCallback(() => {
+  console.log('Canvas rendered with isDrawing:', isDrawing);
+  
+  // Initialize canvas context
+  useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
+    // Set canvas resolution to match display size
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    
+    // Scale all drawing operations
+    ctx.scale(dpr, dpr);
+    
+    // Set canvas display size
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+    
+    // Set drawing styles
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineWidth;
+    
+    // Store context for later use
+    ctxRef.current = ctx;
+    
+    console.log('Canvas initialized with context');
+  }, [width, height, color, lineWidth]);
+  
+  // Clear the canvas
+  const clearCanvasFunc = useCallback(() => {
+    const ctx = ctxRef.current;
+    const canvas = canvasRef.current;
+    
+    if (!ctx || !canvas) {
+      console.error('Cannot clear canvas - context or canvas is null');
+      return;
+    }
+    
+    console.log('Clearing canvas');
     ctx.clearRect(0, 0, width, height);
   }, [width, height]);
   
   // This function is used to handle draw events from other users
   const handleRemoteDraw = useCallback((data: DrawData) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    const ctx = ctxRef.current;
+    if (!ctx) {
+      console.error('Cannot handle remote draw - context is null');
+      return;
+    }
     
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    console.log('Handling remote draw:', data.type, data.x, data.y);
     
     ctx.strokeStyle = data.color;
     ctx.lineWidth = data.lineWidth;
@@ -72,30 +112,49 @@ export default function Canvas({
   // Process remote drawing data when it arrives
   useEffect(() => {
     if (remoteDrawData) {
+      console.log('Received remote draw data:', remoteDrawData.type);
       handleRemoteDraw(remoteDrawData);
     }
   }, [remoteDrawData, handleRemoteDraw]);
   
-  // Setup mouse events
+  // Update context when color or line width changes
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    
-    const ctx = canvas.getContext('2d');
+    const ctx = ctxRef.current;
     if (!ctx) return;
     
     ctx.strokeStyle = color;
     ctx.lineWidth = lineWidth;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
+  }, [color, lineWidth]);
+  
+  // Setup mouse events
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      console.error('Canvas ref is null');
+      return;
+    }
+    
+    const ctx = ctxRef.current;
+    if (!ctx) {
+      console.error('Canvas context is null');
+      return; 
+    }
     
     const handleMouseDown = (e: MouseEvent) => {
-      if (!isDrawing) return;
+      if (!isDrawing) {
+        console.log('Mouse down but not allowed to draw', { isDrawing });
+        return;
+      }
       
+      console.log('Mouse down - starting to draw', { isDrawing, drawing });
       setDrawing(true);
+      
       const rect = canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      
+      const x = (e.clientX - rect.left) / scaleX;
+      const y = (e.clientY - rect.top) / scaleY;
       
       ctx.beginPath();
       ctx.moveTo(x, y);
@@ -112,9 +171,14 @@ export default function Canvas({
     const handleMouseMove = (e: MouseEvent) => {
       if (!drawing || !isDrawing) return;
       
+      console.log('Mouse move - drawing');
+      
       const rect = canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      
+      const x = (e.clientX - rect.left) / scaleX;
+      const y = (e.clientY - rect.top) / scaleY;
       
       ctx.lineTo(x, y);
       ctx.stroke();
@@ -131,11 +195,15 @@ export default function Canvas({
     const handleMouseUp = (e: MouseEvent) => {
       if (!drawing || !isDrawing) return;
       
+      console.log('Mouse up - ending draw');
       setDrawing(false);
       
       const rect = canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      
+      const x = (e.clientX - rect.left) / scaleX;
+      const y = (e.clientY - rect.top) / scaleY;
       
       ctx.lineTo(x, y);
       ctx.stroke();
@@ -151,7 +219,9 @@ export default function Canvas({
     };
     
     const handleMouseLeave = (e: MouseEvent) => {
-      handleMouseUp(e);
+      if (drawing && isDrawing) {
+        handleMouseUp(e);
+      }
     };
     
     // Add touch support
@@ -159,11 +229,16 @@ export default function Canvas({
       if (!isDrawing) return;
       e.preventDefault();
       
+      console.log('Touch start - starting to draw');
       setDrawing(true);
+      
       const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      
       const touch = e.touches[0];
-      const x = touch.clientX - rect.left;
-      const y = touch.clientY - rect.top;
+      const x = (touch.clientX - rect.left) / scaleX;
+      const y = (touch.clientY - rect.top) / scaleY;
       
       ctx.beginPath();
       ctx.moveTo(x, y);
@@ -181,10 +256,15 @@ export default function Canvas({
       if (!drawing || !isDrawing) return;
       e.preventDefault();
       
+      console.log('Touch move - drawing');
+      
       const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      
       const touch = e.touches[0];
-      const x = touch.clientX - rect.left;
-      const y = touch.clientY - rect.top;
+      const x = (touch.clientX - rect.left) / scaleX;
+      const y = (touch.clientY - rect.top) / scaleY;
       
       ctx.lineTo(x, y);
       ctx.stroke();
@@ -202,15 +282,19 @@ export default function Canvas({
       if (!drawing || !isDrawing) return;
       e.preventDefault();
       
+      console.log('Touch end - ending draw');
       setDrawing(false);
       
       const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      
       // Use the last known touch position
       const touches = e.changedTouches;
       if (touches.length > 0) {
         const touch = touches[0];
-        const x = touch.clientX - rect.left;
-        const y = touch.clientY - rect.top;
+        const x = (touch.clientX - rect.left) / scaleX;
+        const y = (touch.clientY - rect.top) / scaleY;
         
         ctx.lineTo(x, y);
         ctx.stroke();
@@ -225,6 +309,8 @@ export default function Canvas({
         });
       }
     };
+    
+    console.log('Setting up canvas event listeners, isDrawing:', isDrawing);
     
     // Add mouse event listeners
     canvas.addEventListener('mousedown', handleMouseDown);
@@ -254,12 +340,14 @@ export default function Canvas({
   // Handle clear canvas signal
   useEffect(() => {
     if (clearCanvas) {
+      console.log('Clear canvas signal received');
       clearCanvasFunc();
     }
   }, [clearCanvas, clearCanvasFunc]);
   
   // Set up the drawable area
   const handleClearClick = () => {
+    console.log('Clear button clicked');
     clearCanvasFunc();
     onClear();
   };
@@ -275,8 +363,7 @@ export default function Canvas({
       <div className="mb-4 p-2 bg-white rounded shadow-md">
         <canvas
           ref={canvasRef}
-          width={width}
-          height={height}
+          style={{width: `${width}px`, height: `${height}px`}}
           className="border border-gray-300 bg-white cursor-crosshair"
         />
       </div>
@@ -318,6 +405,16 @@ export default function Canvas({
           >
             Clear
           </button>
+        </div>
+      )}
+      
+      {isDrawing ? (
+        <div className="mt-2 text-white bg-green-600 px-4 py-2 rounded">
+          You are drawing! Others can see your drawing in real-time. (isDrawing: {isDrawing.toString()})
+        </div>
+      ) : (
+        <div className="mt-2 text-white bg-blue-600 px-4 py-2 rounded">
+          Viewing mode - wait for your turn to draw. (isDrawing: {isDrawing.toString()})
         </div>
       )}
     </div>

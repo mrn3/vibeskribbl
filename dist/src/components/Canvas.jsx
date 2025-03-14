@@ -5,27 +5,56 @@ exports.default = Canvas;
 const react_1 = require("react");
 function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = 800, height = 600, remoteDrawData }) {
     const canvasRef = (0, react_1.useRef)(null);
+    const ctxRef = (0, react_1.useRef)(null);
     const [drawing, setDrawing] = (0, react_1.useState)(false);
     const [color, setColor] = (0, react_1.useState)('#000000');
     const [lineWidth, setLineWidth] = (0, react_1.useState)(5);
-    // Clear the canvas
-    const clearCanvasFunc = (0, react_1.useCallback)(() => {
+    console.log('Canvas rendered with isDrawing:', isDrawing);
+    // Initialize canvas context
+    (0, react_1.useEffect)(() => {
         const canvas = canvasRef.current;
         if (!canvas)
             return;
         const ctx = canvas.getContext('2d');
         if (!ctx)
             return;
+        // Set canvas resolution to match display size
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+        // Scale all drawing operations
+        ctx.scale(dpr, dpr);
+        // Set canvas display size
+        canvas.style.width = `${width}px`;
+        canvas.style.height = `${height}px`;
+        // Set drawing styles
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = color;
+        ctx.lineWidth = lineWidth;
+        // Store context for later use
+        ctxRef.current = ctx;
+        console.log('Canvas initialized with context');
+    }, [width, height, color, lineWidth]);
+    // Clear the canvas
+    const clearCanvasFunc = (0, react_1.useCallback)(() => {
+        const ctx = ctxRef.current;
+        const canvas = canvasRef.current;
+        if (!ctx || !canvas) {
+            console.error('Cannot clear canvas - context or canvas is null');
+            return;
+        }
+        console.log('Clearing canvas');
         ctx.clearRect(0, 0, width, height);
     }, [width, height]);
     // This function is used to handle draw events from other users
     const handleRemoteDraw = (0, react_1.useCallback)((data) => {
-        const canvas = canvasRef.current;
-        if (!canvas)
+        const ctx = ctxRef.current;
+        if (!ctx) {
+            console.error('Cannot handle remote draw - context is null');
             return;
-        const ctx = canvas.getContext('2d');
-        if (!ctx)
-            return;
+        }
+        console.log('Handling remote draw:', data.type, data.x, data.y);
         ctx.strokeStyle = data.color;
         ctx.lineWidth = data.lineWidth;
         if (data.type === 'start') {
@@ -45,28 +74,42 @@ function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = 800, height =
     // Process remote drawing data when it arrives
     (0, react_1.useEffect)(() => {
         if (remoteDrawData) {
+            console.log('Received remote draw data:', remoteDrawData.type);
             handleRemoteDraw(remoteDrawData);
         }
     }, [remoteDrawData, handleRemoteDraw]);
-    // Setup mouse events
+    // Update context when color or line width changes
     (0, react_1.useEffect)(() => {
-        const canvas = canvasRef.current;
-        if (!canvas)
-            return;
-        const ctx = canvas.getContext('2d');
+        const ctx = ctxRef.current;
         if (!ctx)
             return;
         ctx.strokeStyle = color;
         ctx.lineWidth = lineWidth;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
+    }, [color, lineWidth]);
+    // Setup mouse events
+    (0, react_1.useEffect)(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) {
+            console.error('Canvas ref is null');
+            return;
+        }
+        const ctx = ctxRef.current;
+        if (!ctx) {
+            console.error('Canvas context is null');
+            return;
+        }
         const handleMouseDown = (e) => {
-            if (!isDrawing)
+            if (!isDrawing) {
+                console.log('Mouse down but not allowed to draw', { isDrawing });
                 return;
+            }
+            console.log('Mouse down - starting to draw', { isDrawing, drawing });
             setDrawing(true);
             const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const x = (e.clientX - rect.left) / scaleX;
+            const y = (e.clientY - rect.top) / scaleY;
             ctx.beginPath();
             ctx.moveTo(x, y);
             onDraw({
@@ -80,9 +123,12 @@ function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = 800, height =
         const handleMouseMove = (e) => {
             if (!drawing || !isDrawing)
                 return;
+            console.log('Mouse move - drawing');
             const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const x = (e.clientX - rect.left) / scaleX;
+            const y = (e.clientY - rect.top) / scaleY;
             ctx.lineTo(x, y);
             ctx.stroke();
             onDraw({
@@ -96,10 +142,13 @@ function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = 800, height =
         const handleMouseUp = (e) => {
             if (!drawing || !isDrawing)
                 return;
+            console.log('Mouse up - ending draw');
             setDrawing(false);
             const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const x = (e.clientX - rect.left) / scaleX;
+            const y = (e.clientY - rect.top) / scaleY;
             ctx.lineTo(x, y);
             ctx.stroke();
             ctx.closePath();
@@ -112,18 +161,23 @@ function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = 800, height =
             });
         };
         const handleMouseLeave = (e) => {
-            handleMouseUp(e);
+            if (drawing && isDrawing) {
+                handleMouseUp(e);
+            }
         };
         // Add touch support
         const handleTouchStart = (e) => {
             if (!isDrawing)
                 return;
             e.preventDefault();
+            console.log('Touch start - starting to draw');
             setDrawing(true);
             const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
             const touch = e.touches[0];
-            const x = touch.clientX - rect.left;
-            const y = touch.clientY - rect.top;
+            const x = (touch.clientX - rect.left) / scaleX;
+            const y = (touch.clientY - rect.top) / scaleY;
             ctx.beginPath();
             ctx.moveTo(x, y);
             onDraw({
@@ -138,10 +192,13 @@ function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = 800, height =
             if (!drawing || !isDrawing)
                 return;
             e.preventDefault();
+            console.log('Touch move - drawing');
             const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
             const touch = e.touches[0];
-            const x = touch.clientX - rect.left;
-            const y = touch.clientY - rect.top;
+            const x = (touch.clientX - rect.left) / scaleX;
+            const y = (touch.clientY - rect.top) / scaleY;
             ctx.lineTo(x, y);
             ctx.stroke();
             onDraw({
@@ -156,14 +213,17 @@ function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = 800, height =
             if (!drawing || !isDrawing)
                 return;
             e.preventDefault();
+            console.log('Touch end - ending draw');
             setDrawing(false);
             const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
             // Use the last known touch position
             const touches = e.changedTouches;
             if (touches.length > 0) {
                 const touch = touches[0];
-                const x = touch.clientX - rect.left;
-                const y = touch.clientY - rect.top;
+                const x = (touch.clientX - rect.left) / scaleX;
+                const y = (touch.clientY - rect.top) / scaleY;
                 ctx.lineTo(x, y);
                 ctx.stroke();
                 ctx.closePath();
@@ -176,6 +236,7 @@ function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = 800, height =
                 });
             }
         };
+        console.log('Setting up canvas event listeners, isDrawing:', isDrawing);
         // Add mouse event listeners
         canvas.addEventListener('mousedown', handleMouseDown);
         canvas.addEventListener('mousemove', handleMouseMove);
@@ -200,11 +261,13 @@ function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = 800, height =
     // Handle clear canvas signal
     (0, react_1.useEffect)(() => {
         if (clearCanvas) {
+            console.log('Clear canvas signal received');
             clearCanvasFunc();
         }
     }, [clearCanvas, clearCanvasFunc]);
     // Set up the drawable area
     const handleClearClick = () => {
+        console.log('Clear button clicked');
         clearCanvasFunc();
         onClear();
     };
@@ -214,7 +277,7 @@ function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = 800, height =
     const lineWidthOptions = [2, 5, 10, 15, 20];
     return (<div className="flex flex-col items-center">
       <div className="mb-4 p-2 bg-white rounded shadow-md">
-        <canvas ref={canvasRef} width={width} height={height} className="border border-gray-300 bg-white cursor-crosshair"/>
+        <canvas ref={canvasRef} style={{ width: `${width}px`, height: `${height}px` }} className="border border-gray-300 bg-white cursor-crosshair"/>
       </div>
       
       {isDrawing && (<div className="flex space-x-4 items-center p-2 bg-white rounded shadow-md">
@@ -231,6 +294,12 @@ function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = 800, height =
           <button className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600" onClick={handleClearClick} aria-label="Clear canvas">
             Clear
           </button>
+        </div>)}
+      
+      {isDrawing ? (<div className="mt-2 text-white bg-green-600 px-4 py-2 rounded">
+          You are drawing! Others can see your drawing in real-time. (isDrawing: {isDrawing.toString()})
+        </div>) : (<div className="mt-2 text-white bg-blue-600 px-4 py-2 rounded">
+          Viewing mode - wait for your turn to draw. (isDrawing: {isDrawing.toString()})
         </div>)}
     </div>);
 }

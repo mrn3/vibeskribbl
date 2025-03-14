@@ -103,6 +103,30 @@ function setupSocketServer(server) {
             const player = room.players.find(p => p.id === playerId);
             if (!player)
                 return;
+            // Special debug command to force drawing mode
+            if (message.startsWith('/drawme')) {
+                console.log(`Player ${player.name} forcing drawing mode`);
+                // Reset drawing flag for all players
+                room.players.forEach(p => p.isDrawing = false);
+                // Set this player as drawer
+                player.isDrawing = true;
+                room.currentDrawer = player.id;
+                room.gameState = 'playing';
+                // Send the room update
+                io.to(roomId).emit('room-update', room);
+                // Notify about the new drawer
+                io.to(roomId).emit('new-drawer', {
+                    drawerId: player.id,
+                    drawerName: player.name,
+                    roundNumber: room.currentRound
+                });
+                // Generate word options
+                const wordOptions = getRandomWords(3);
+                room.wordOptions = wordOptions;
+                // Send word options only to the drawer
+                socket.emit('word-options', { options: wordOptions });
+                return;
+            }
             // Check if message is the correct word
             if (room.gameState === 'playing' &&
                 room.currentWord &&
@@ -212,8 +236,10 @@ function startGame(io, room) {
 function nextRound(io, room) {
     // Clear any timers
     // (In a real implementation, you'd store and clear the timer)
+    console.log('Starting next round for room:', room.id);
     // Check if game should end
     if (room.currentRound > room.maxRounds) {
+        console.log('Max rounds reached, ending game');
         endGame(io, room);
         return;
     }
@@ -221,8 +247,11 @@ function nextRound(io, room) {
     room.players.forEach(p => p.isDrawing = false);
     // Select next drawer (round robin)
     const currentDrawerIndex = room.players.findIndex(p => p.id === room.currentDrawer);
+    console.log('Current drawer index:', currentDrawerIndex);
     const nextDrawerIndex = (currentDrawerIndex + 1) % room.players.length;
+    console.log('Next drawer index:', nextDrawerIndex);
     const nextDrawer = room.players[nextDrawerIndex];
+    console.log('Selected next drawer:', nextDrawer.name, nextDrawer.id);
     nextDrawer.isDrawing = true;
     room.currentDrawer = nextDrawer.id;
     // Generate word options
@@ -233,14 +262,21 @@ function nextRound(io, room) {
     // Send word options only to the drawer
     const drawerSocket = io.sockets.sockets.get(nextDrawer.id);
     if (drawerSocket) {
+        console.log('Sending word options to drawer:', nextDrawer.name);
         drawerSocket.emit('word-options', { options: wordOptions });
     }
+    else {
+        console.warn('Could not find drawer socket for:', nextDrawer.id);
+    }
     // Notify everyone about the drawer
+    console.log('Notifying all players about new drawer:', nextDrawer.name);
     io.to(room.id).emit('new-drawer', {
         drawerId: nextDrawer.id,
         drawerName: nextDrawer.name,
         roundNumber: room.currentRound
     });
+    // Send current room state to all players
+    io.to(room.id).emit('room-update', room);
     // Increment round counter if we've gone through all players
     if (nextDrawerIndex === 0) {
         room.currentRound++;
