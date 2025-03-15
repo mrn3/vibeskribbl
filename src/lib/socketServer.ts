@@ -89,7 +89,7 @@ export function setupSocketServer(server: HTTPServer) {
           id: roomId,
           players: [],
           gameState: 'waiting',
-          roundTime: 80,
+          roundTime: 30,
           currentRound: 0,
           maxRounds: 3
         };
@@ -104,7 +104,7 @@ export function setupSocketServer(server: HTTPServer) {
             id: roomId,
             players: [],
             gameState: 'waiting',
-            roundTime: 80,
+            roundTime: 30,
             currentRound: 0,
             maxRounds: 3
           };

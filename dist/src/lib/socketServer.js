@@ -61,7 +61,7 @@ function setupSocketServer(server) {
                     id: roomId,
                     players: [],
                     gameState: 'waiting',
-                    roundTime: 80,
+                    roundTime: 30,
                     currentRound: 0,
                     maxRounds: 3
                 };
@@ -76,7 +76,7 @@ function setupSocketServer(server) {
                         id: roomId,
                         players: [],
                         gameState: 'waiting',
-                        roundTime: 80,
+                        roundTime: 30,
                         currentRound: 0,
                         maxRounds: 3
                     };
