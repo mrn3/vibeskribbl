@@ -599,9 +599,69 @@ export default function GamePageContent() {
   // Function to copy link to clipboard
   const copyLinkToClipboard = () => {
     const link = getRoomLink();
-    navigator.clipboard.writeText(link);
     
-    // Show toast instead of alert
+    try {
+      // Modern clipboard API - only works in secure contexts (HTTPS or localhost)
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(link)
+          .then(() => {
+            showCopiedToast();
+          })
+          .catch(err => {
+            console.error('Could not copy using Clipboard API:', err);
+            fallbackCopyToClipboard(link);
+          });
+      } else {
+        // Fallback for browsers without clipboard API
+        fallbackCopyToClipboard(link);
+      }
+    } catch (err) {
+      console.error('Error copying to clipboard:', err);
+      fallbackCopyToClipboard(link);
+    }
+  };
+  
+  // Fallback clipboard copy method using textarea
+  const fallbackCopyToClipboard = (text: string) => {
+    try {
+      // Create a temporary textarea element
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      
+      // Make the textarea out of viewport
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-999999px';
+      textArea.style.top = '-999999px';
+      document.body.appendChild(textArea);
+      
+      // Select and copy
+      textArea.focus();
+      textArea.select();
+      
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textArea);
+      
+      if (successful) {
+        showCopiedToast();
+      } else {
+        // If even the fallback fails, show a different message
+        setToast({
+          visible: true,
+          message: "Couldn't copy automatically. Link: " + text
+        });
+      }
+    } catch (err) {
+      console.error('Fallback clipboard copy failed:', err);
+      // If all else fails, at least show the link
+      setToast({
+        visible: true,
+        message: "Copy failed. Use this link: " + text
+      });
+    }
+  };
+  
+  // Helper to show the copied toast
+  const showCopiedToast = () => {
     setToast({
       visible: true,
       message: "Room link copied to clipboard!"
