@@ -107,6 +107,12 @@ interface RoundSummaryData {
   };
 }
 
+interface WordGuessedData {
+  word: string;
+  pointsEarned?: number;
+  message?: string;
+}
+
 export default function GamePageContent() {
   const searchParams = useSearchParams();
   const playerNameParam = searchParams.get('name');
@@ -250,8 +256,16 @@ export default function GamePageContent() {
       }
     });
     
-    socket.on('word-guessed', ({ word }: WordToDrawData) => {
-      addSystemMessage(`You guessed the word: ${word}!`, false, true);
+    socket.on('word-guessed', ({ word, pointsEarned, message }: WordGuessedData) => {
+      if (message) {
+        addSystemMessage(message, false, true);
+      } else {
+        addSystemMessage(`You guessed the word: ${word}!`, false, true);
+      }
+      
+      if (pointsEarned) {
+        addSystemMessage(`+${pointsEarned} points!`, false, true);
+      }
     });
     
     socket.on('chat-update', ({ playerId, playerName, message }: ChatUpdateData) => {

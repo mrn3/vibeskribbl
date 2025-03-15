@@ -68,6 +68,29 @@ function RoundSummary({ word, players, drawer, isVisible, onClose }) {
               </div>);
         })}
         </div>
+        
+        {/* Add scoring explanation */}
+        <div className="mt-5 pt-3 border-t border-gray-200">
+          <h4 className="text-sm font-semibold text-gray-700 mb-1">Scoring System</h4>
+          <ul className="text-xs text-gray-600 space-y-1">
+            <li className="flex items-center">
+              <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
+              <span>Fast guess (0-10 sec): <strong>100 points</strong></span>
+            </li>
+            <li className="flex items-center">
+              <div className="w-3 h-3 bg-blue-500 rounded-full mr-2"></div>
+              <span>Quick guess (10-20 sec): <strong>80 points</strong></span>
+            </li>
+            <li className="flex items-center">
+              <div className="w-3 h-3 bg-yellow-500 rounded-full mr-2"></div>
+              <span>Standard guess (20-30 sec): <strong>40 points</strong></span>
+            </li>
+            <li className="flex items-center">
+              <div className="w-3 h-3 bg-purple-500 rounded-full mr-2"></div>
+              <span>First correct guess: <strong>+30 bonus points</strong></span>
+            </li>
+          </ul>
+        </div>
       </div>
     </div>);
 }

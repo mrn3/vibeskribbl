@@ -136,8 +136,16 @@ function GamePageContent() {
                 addSystemMessage(`${guesserName} figured out your drawing!`, false, true);
             }
         });
-        socket.on('word-guessed', ({ word }) => {
-            addSystemMessage(`You guessed the word: ${word}!`, false, true);
+        socket.on('word-guessed', ({ word, pointsEarned, message }) => {
+            if (message) {
+                addSystemMessage(message, false, true);
+            }
+            else {
+                addSystemMessage(`You guessed the word: ${word}!`, false, true);
+            }
+            if (pointsEarned) {
+                addSystemMessage(`+${pointsEarned} points!`, false, true);
+            }
         });
         socket.on('chat-update', ({ playerId, playerName, message }) => {
             addMessage(playerId, playerName, message);

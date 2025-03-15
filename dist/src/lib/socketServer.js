@@ -237,17 +237,48 @@ Round: ${room.currentRound}/${room.maxRounds}`;
                 if (guessMatches && playerIsNotDrawer) {
                     // Player guessed correctly
                     console.log(`CORRECT GUESS by ${player.name}!`);
+                    // Calculate points based on time elapsed
+                    let pointsEarned = 40; // Default points (20-30 second range)
+                    let timeBonus = "";
+                    if (room.roundStartTime) {
+                        const timeElapsed = (Date.now() - room.roundStartTime) / 1000; // Convert to seconds
+                        if (timeElapsed <= 10) {
+                            pointsEarned = 100; // 0-10 seconds
+                            timeBonus = " (Fast guess: +100)";
+                        }
+                        else if (timeElapsed <= 20) {
+                            pointsEarned = 80; // 10-20 seconds
+                            timeBonus = " (Quick guess: +80)";
+                        }
+                        else {
+                            timeBonus = " (Standard guess: +40)";
+                        }
+                        console.log(`Time elapsed for guess: ${timeElapsed.toFixed(1)} seconds, points: ${pointsEarned}`);
+                    }
+                    // Add first guesser bonus if applicable
+                    let firstGuesserBonus = "";
+                    if (!room.firstGuesser) {
+                        pointsEarned += 30;
+                        room.firstGuesser = true;
+                        firstGuesserBonus = " (First guesser: +30)";
+                        console.log(`${player.name} is the first to guess correctly, adding 30 point bonus`);
+                    }
                     // Save previous score before updating
                     player.previousScore = player.score;
-                    player.score += 100;
+                    player.score += pointsEarned;
                     player.hasGuessedCorrectly = true;
                     // Join the player to a guessed-room to track who has guessed
                     socket.join(`${roomId}-guessed`);
-                    console.log(`Player ${player.name} guessed the word: ${room.currentWord}`);
+                    console.log(`Player ${player.name} guessed the word: ${room.currentWord}, earned ${pointsEarned} points`);
                     console.log(`Updated player state: ${JSON.stringify(player)}`);
                     // Notify everyone
                     io.to(roomId).emit('player-guessed', { playerId: player.id, playerName: player.name });
-                    socket.emit('word-guessed', { word: room.currentWord });
+                    // Notify the player about their points with explanation
+                    socket.emit('word-guessed', {
+                        word: room.currentWord,
+                        pointsEarned: pointsEarned,
+                        message: `You guessed correctly!${timeBonus}${firstGuesserBonus}`
+                    });
                     // Send updated player list to everyone
                     io.to(roomId).emit('room-update', room);
                     // Check if all players have guessed
@@ -322,6 +353,8 @@ Round: ${room.currentRound}/${room.maxRounds}`;
             room.currentWord = word;
             room.wordOptions = undefined;
             room.gameState = 'playing'; // Ensure game state is set to playing
+            room.roundStartTime = Date.now(); // Record when the round started
+            room.firstGuesser = false; // Reset first guesser flag
             console.log(`Game state changed to: ${room.gameState}`);
             // Notify everyone that word was selected
             io.to(roomId).emit('round-started', {
@@ -525,6 +558,10 @@ function startRoundTimer(io, room) {
     if (!room.revealedLetters) {
         room.revealedLetters = [];
     }
+    // Set/reset the round start time and first guesser flag
+    room.roundStartTime = Date.now();
+    room.firstGuesser = false;
+    console.log(`Round timer started at ${new Date(room.roundStartTime).toISOString()}`);
     // In a real implementation, you'd set up an actual timer
     // and store it to be canceled if needed
     // For now, just emit an event that will be handled by clients
