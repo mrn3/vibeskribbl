@@ -1,5 +1,7 @@
 'use client';
 
+import React from 'react';
+
 interface Player {
   id: string;
   name: string;
@@ -19,7 +21,7 @@ export default function PlayerList({ players, currentPlayerId }: PlayerListProps
   
   return (
     <div className="bg-white rounded-lg shadow-md overflow-hidden">
-      <div className="bg-blue-700 text-white p-3 font-bold text-lg">
+      <div className="bg-blue-500 text-white p-3 font-bold text-lg">
         Players
       </div>
       <ul className="divide-y">
@@ -44,7 +46,7 @@ export default function PlayerList({ players, currentPlayerId }: PlayerListProps
                 {player.hasGuessedCorrectly && ' 🎯'}
               </span>
             </div>
-            <span className="font-bold text-black">{player.score}</span>
+            <span className="font-bold text-gray-900">{player.score}</span>
           </li>
         ))}
       </ul>

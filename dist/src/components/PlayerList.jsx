@@ -1,12 +1,16 @@
 "use strict";
 'use client';
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = PlayerList;
+const react_1 = __importDefault(require("react"));
 function PlayerList({ players, currentPlayerId }) {
     // Sort players by score in descending order
     const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
     return (<div className="bg-white rounded-lg shadow-md overflow-hidden">
-      <div className="bg-blue-700 text-white p-3 font-bold text-lg">
+      <div className="bg-blue-500 text-white p-3 font-bold text-lg">
         Players
       </div>
       <ul className="divide-y">
@@ -23,7 +27,7 @@ function PlayerList({ players, currentPlayerId }) {
                 {player.hasGuessedCorrectly && ' 🎯'}
               </span>
             </div>
-            <span className="font-bold text-black">{player.score}</span>
+            <span className="font-bold text-gray-900">{player.score}</span>
           </li>))}
       </ul>
     </div>);
