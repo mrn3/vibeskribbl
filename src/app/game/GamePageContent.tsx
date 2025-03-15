@@ -93,6 +93,10 @@ interface ChatUpdateData {
   message: string;
 }
 
+interface WordHintData {
+  hint: string;
+}
+
 export default function GamePageContent() {
   const searchParams = useSearchParams();
   const playerNameParam = searchParams.get('name');
@@ -178,6 +182,7 @@ export default function GamePageContent() {
     socket.off('word-guessed');
     socket.off('chat-update');
     socket.off('canvas-cleared');
+    socket.off('word-hint');
     
     socket.on('draw-update', handleDrawEvent);
     
@@ -240,6 +245,14 @@ export default function GamePageContent() {
     
     socket.on('canvas-cleared', () => {
       setClearCanvas(true);
+    });
+    
+    socket.on('word-hint', ({ hint }: WordHintData) => {
+      setWordHint(hint);
+      // No need to update the drawer with hints
+      if (!room || playerId === room.currentDrawer) return;
+      
+      // We'll let the chat update handle displaying the hint
     });
   }, [handleDrawEvent, playerId, isDrawing, addSystemMessage, addMessage]);
   

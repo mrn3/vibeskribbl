@@ -20,6 +20,8 @@ interface Room {
   currentRound: number;
   maxRounds: number;
   wordOptions?: string[];
+  revealedLetters?: number[];
+  hintTimer?: NodeJS.Timeout;
 }
 
 const rooms = new Map<string, Room>();
@@ -490,6 +492,15 @@ function nextRound(io: SocketIOServer, room: Room) {
     p.hasGuessedCorrectly = false;
   });
   
+  // Reset revealed letters for the new round
+  room.revealedLetters = [];
+  
+  // Clear hint timer if exists
+  if (room.hintTimer) {
+    clearInterval(room.hintTimer);
+    room.hintTimer = undefined;
+  }
+  
   // Remove all players from the guessed room for this round
   const guessedRoom = `${room.id}-guessed`;
   const socketIdsInGuessedRoom = io.sockets.adapter.rooms.get(guessedRoom);
@@ -599,6 +610,11 @@ function endGame(io: SocketIOServer, room: Room) {
 }
 
 function startRoundTimer(io: SocketIOServer, room: Room) {
+  // Initialize revealed letters array if not present
+  if (!room.revealedLetters) {
+    room.revealedLetters = [];
+  }
+  
   // In a real implementation, you'd set up an actual timer
   // and store it to be canceled if needed
   
@@ -607,9 +623,59 @@ function startRoundTimer(io: SocketIOServer, room: Room) {
     duration: room.roundTime
   });
   
+  // Set up a timer to reveal a letter every 10 seconds
+  room.hintTimer = setInterval(() => {
+    if (rooms.has(room.id) && room.gameState === 'playing' && room.currentWord) {
+      // Get unrevealed letter indices
+      const wordLength = room.currentWord.length;
+      const unrevealedIndices = Array.from({ length: wordLength }, (_, i) => i)
+        .filter(i => !room.revealedLetters!.includes(i));
+      
+      // If all letters are revealed or no unrevealed indices, stop the timer
+      if (unrevealedIndices.length === 0) {
+        if (room.hintTimer) {
+          clearInterval(room.hintTimer);
+          room.hintTimer = undefined;
+        }
+        return;
+      }
+      
+      // Randomly select an unrevealed letter
+      const randomIndex = Math.floor(Math.random() * unrevealedIndices.length);
+      const letterToReveal = unrevealedIndices[randomIndex];
+      room.revealedLetters!.push(letterToReveal);
+      
+      console.log(`Revealing letter at index ${letterToReveal} for word "${room.currentWord}"`);
+      
+      // Prepare masked word with revealed letters
+      const maskedWord = room.currentWord.split('').map((letter, index) => {
+        return room.revealedLetters!.includes(index) ? letter : '_';
+      }).join(' ');
+      
+      // Send the hint to all non-drawer players
+      io.to(room.id).emit('word-hint', { 
+        hint: maskedWord,
+        revealedIndices: room.revealedLetters
+      });
+      
+      // Also send as system chat message
+      io.to(room.id).emit('chat-update', {
+        playerId: 'system',
+        playerName: 'System',
+        message: `Hint: ${maskedWord}`
+      });
+    }
+  }, 10000); // 10 seconds interval
+  
   // Simulate a timer ending after roundTime seconds
   setTimeout(() => {
     if (rooms.has(room.id) && room.gameState === 'playing') {
+      // Clear the hint timer
+      if (room.hintTimer) {
+        clearInterval(room.hintTimer);
+        room.hintTimer = undefined;
+      }
+      
       // Announce that time is up
       io.to(room.id).emit('round-ended', { 
         word: room.currentWord

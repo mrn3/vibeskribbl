@@ -91,6 +91,7 @@ function GamePageContent() {
         socket.off('word-guessed');
         socket.off('chat-update');
         socket.off('canvas-cleared');
+        socket.off('word-hint');
         socket.on('draw-update', handleDrawEvent);
         socket.on('game-started', ({ currentRound, maxRounds }) => {
             addSystemMessage(`Game started! ${currentRound} of ${maxRounds} rounds`);
@@ -138,6 +139,13 @@ function GamePageContent() {
         });
         socket.on('canvas-cleared', () => {
             setClearCanvas(true);
+        });
+        socket.on('word-hint', ({ hint }) => {
+            setWordHint(hint);
+            // No need to update the drawer with hints
+            if (!room || playerId === room.currentDrawer)
+                return;
+            // We'll let the chat update handle displaying the hint
         });
     }, [handleDrawEvent, playerId, isDrawing, addSystemMessage, addMessage]);
     // Function to handle name submission
