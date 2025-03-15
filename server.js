@@ -4,11 +4,11 @@ const next = require('next');
 const { setupSocketServer } = require('./dist/src/lib/socketServer');
 
 const dev = process.env.NODE_ENV !== 'production';
-const hostname = 'localhost';
+const hostname = process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost';
 const port = process.env.PORT || 3001;
 
 // Prepare Next.js app
-const app = next({ dev, hostname, port });
+const app = next({ dev, hostname: 'localhost', port });
 const handle = app.getRequestHandler();
 
 app.prepare().then(() => {
@@ -26,8 +26,10 @@ app.prepare().then(() => {
   // Set up socket.io
   setupSocketServer(server);
 
-  server.listen(port, (err) => {
+  // Listen on all interfaces in production, or localhost in development
+  server.listen(port, hostname, (err) => {
     if (err) throw err;
     console.log(`> Ready on http://${hostname}:${port}`);
+    console.log('> Mode:', dev ? 'development' : 'production');
   });
 }); 

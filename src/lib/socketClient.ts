@@ -20,6 +20,20 @@ function cleanupSocket() {
   isConnecting = false;
 }
 
+// Helper function to get the appropriate socket URL
+function getSocketUrl() {
+  // In the browser, use the same host/origin
+  if (typeof window !== 'undefined') {
+    // Get protocol, hostname, and port from current location
+    const { protocol, hostname, port } = window.location;
+    // Use the same port as the page is currently on (usually 3001 for both frontend and backend in this app)
+    return `${protocol}//${hostname}:${port || '3001'}`;
+  }
+  
+  // Fallback for server-side or if window is not available
+  return process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001';
+}
+
 export function getSocket(): Socket | null {
   // If we're already connecting, don't try to create another connection
   if (isConnecting) {
@@ -51,7 +65,9 @@ export function getSocket(): Socket | null {
   
   console.log(`Creating new socket connection (attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS})`);
   
-  const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001';
+  // Get the appropriate socket URL based on the environment
+  const socketUrl = getSocketUrl();
+  console.log(`Connecting to Socket.IO server at: ${socketUrl}`);
   
   // Create new socket - Start with polling for better compatibility
   socket = io(socketUrl, {
