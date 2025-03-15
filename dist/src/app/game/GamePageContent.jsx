@@ -327,6 +327,6 @@ function GamePageContent() {
       </div>
       
       {/* Word selector modal */}
-      {wordOptions.length > 0 && (<WordSelector_1.default words={wordOptions} onSelect={handleWordSelect} timeLeft={15}/>)}
+      {wordOptions.length > 0 && (<WordSelector_1.default words={wordOptions} onSelect={handleWordSelect} timeLeft={10}/>)}
     </div>);
 }

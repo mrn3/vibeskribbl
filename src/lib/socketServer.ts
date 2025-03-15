@@ -30,6 +30,18 @@ const wordList = [
   'clock', 'shoe', 'hat', 'glasses', 'shirt', 'pants', 'door', 'window'
 ];
 
+// Map to track word selection timers
+const wordSelectionTimers = new Map<string, NodeJS.Timeout>();
+
+// Helper to clear word selection timers
+function clearWordSelectionTimer(playerId: string) {
+  const timer = wordSelectionTimers.get(playerId);
+  if (timer) {
+    clearTimeout(timer);
+    wordSelectionTimers.delete(playerId);
+  }
+}
+
 export function setupSocketServer(server: HTTPServer) {
   const io = new SocketIOServer(server, {
     cors: {
@@ -297,6 +309,9 @@ Round: ${room.currentRound}/${room.maxRounds}`;
 
       console.log(`Drawer ${socket.id} selected word: ${word}`);
       
+      // Clear any word selection timer
+      clearWordSelectionTimer(socket.id);
+      
       // Update room state with the word and change game state to playing
       room.currentWord = word;
       room.wordOptions = undefined;
@@ -335,6 +350,9 @@ Round: ${room.currentRound}/${room.maxRounds}`;
       
       console.log(`Client disconnected: ${socket.id}, Reason: ${reason}`);
       console.log(`Connection stats - Total: ${connectionCount.total}, Active: ${connectionCount.active}, Disconnected: ${connectionCount.disconnected}`);
+      
+      // Clear any word selection timer for this player
+      clearWordSelectionTimer(socket.id);
       
       // Find and remove player from any rooms
       for (const [roomId, room] of rooms.entries()) {
@@ -451,6 +469,43 @@ function nextRound(io: SocketIOServer, room: Room) {
   if (drawerSocket) {
     console.log('Sending word options to drawer:', nextDrawer.name);
     drawerSocket.emit('word-options', { options: wordOptions });
+    
+    // Start a timer for word selection
+    clearWordSelectionTimer(nextDrawer.id); // Clear any existing timer
+    
+    const timer = setTimeout(() => {
+      // If the room still exists and the player is still the drawer
+      if (rooms.has(room.id) && room.currentDrawer === nextDrawer.id && room.gameState === 'between-rounds') {
+        console.log(`Word selection timeout for ${nextDrawer.name}, auto-selecting a word`);
+        
+        // Select a random word
+        const randomWord = wordOptions[Math.floor(Math.random() * wordOptions.length)];
+        
+        // Update room state
+        room.currentWord = randomWord;
+        room.wordOptions = undefined;
+        room.gameState = 'playing';
+        
+        console.log(`Auto-selected word: ${randomWord}, game state changed to: ${room.gameState}`);
+        
+        // Notify everyone that word was selected
+        io.to(room.id).emit('round-started', {
+          drawerId: nextDrawer.id,
+          wordLength: randomWord.length
+        });
+        
+        // Send the actual word to the drawer
+        drawerSocket.emit('word-to-draw', { word: randomWord });
+        
+        // Send updated room to everyone
+        io.to(room.id).emit('room-update', room);
+        
+        // Start round timer
+        startRoundTimer(io, room);
+      }
+    }, 10000); // 10 seconds timeout
+    
+    wordSelectionTimers.set(nextDrawer.id, timer);
   } else {
     console.warn('Could not find drawer socket for:', nextDrawer.id);
   }

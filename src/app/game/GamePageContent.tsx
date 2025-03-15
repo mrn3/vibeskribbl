@@ -482,7 +482,7 @@ export default function GamePageContent() {
         <WordSelector
           words={wordOptions}
           onSelect={handleWordSelect}
-          timeLeft={15}
+          timeLeft={10}
         />
       )}
     </div>
