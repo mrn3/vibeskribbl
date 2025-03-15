@@ -95,10 +95,34 @@ function setupSocketServer(server) {
             // Send room data to all clients in the room
             io.to(roomId).emit('room-update', room);
             socket.emit('room-joined', { roomId, playerId: player.id });
-            // If enough players and not already playing, start the game
-            if (room.players.length >= 2 && room.gameState === 'waiting') {
-                startGame(io, room);
+            // No longer auto-start the game when 2+ players join
+            // Instead, wait for the start-game event
+        });
+        // New event handler for manually starting the game
+        socket.on('start-game', ({ roomId }) => {
+            const room = rooms.get(roomId);
+            if (!room)
+                return;
+            // Only allow starting the game if there are at least 2 players
+            if (room.players.length < 2) {
+                socket.emit('chat-update', {
+                    playerId: 'system',
+                    playerName: 'System',
+                    message: 'Need at least 2 players to start the game'
+                });
+                return;
             }
+            // Only start if the game is in waiting state
+            if (room.gameState !== 'waiting') {
+                socket.emit('chat-update', {
+                    playerId: 'system',
+                    playerName: 'System',
+                    message: 'Game is already in progress'
+                });
+                return;
+            }
+            console.log(`Game manually started in room ${roomId} by ${socket.id}`);
+            startGame(io, room);
         });
         // Handle drawing data
         socket.on('draw', ({ roomId, drawData }) => {

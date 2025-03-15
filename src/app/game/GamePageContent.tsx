@@ -408,6 +408,14 @@ export default function GamePageContent() {
     };
   };
   
+  // Add a function to handle starting the game
+  const handleStartGame = () => {
+    if (!roomId || !socketRef.current) return;
+    
+    console.log('Attempting to start the game');
+    socketRef.current.emit('start-game', { roomId });
+  };
+  
   // Render loading state
   if (!roomId || !playerId || !room) {
     return (
@@ -420,6 +428,76 @@ export default function GamePageContent() {
     );
   }
   
+  // Render waiting room UI when game is in waiting state
+  if (room.gameState === 'waiting') {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-blue-400 to-purple-500 p-4">
+        <div className="max-w-3xl mx-auto">
+          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h1 className="text-3xl font-bold text-center mb-2">VibeSkribbl</h1>
+            <p className="text-center text-gray-600 mb-6">Waiting for players to join...</p>
+            
+            <div className="flex justify-between items-center bg-gray-100 p-4 rounded-lg mb-6">
+              <div>
+                <p className="font-medium">Room ID:</p>
+                <p className="font-mono bg-white px-3 py-1 rounded border select-all">{roomId}</p>
+                <p className="text-sm text-gray-500 mt-2">Share this with friends to join</p>
+              </div>
+              <div>
+                <p className="font-medium">Players:</p>
+                <p className="text-xl font-bold">{room.players.length} / 8</p>
+              </div>
+            </div>
+            
+            <div className="mb-6">
+              <h2 className="text-xl font-bold mb-3">Players in Room:</h2>
+              <div className="bg-white border rounded-lg p-2">
+                <ul className="divide-y">
+                  {room.players.map((player) => (
+                    <li key={player.id} className="py-2 px-3 flex items-center">
+                      <span className={`font-medium ${player.id === playerId ? 'text-blue-600' : 'text-gray-900'}`}>
+                        {player.name} {player.id === playerId && '(You)'}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+            
+            <div className="flex justify-center">
+              <button
+                onClick={handleStartGame}
+                disabled={room.players.length < 2}
+                className={`px-6 py-3 rounded-lg text-xl font-bold text-white transition-colors ${
+                  room.players.length < 2
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-green-600 hover:bg-green-700'
+                }`}
+              >
+                {room.players.length < 2 ? 'Need at least 2 players' : 'Start Game'}
+              </button>
+            </div>
+          </div>
+          
+          {/* Chat in waiting room */}
+          <div className="bg-white rounded-lg shadow-md p-4">
+            <h2 className="text-xl font-bold mb-3">Chat</h2>
+            <div className="h-64">
+              <Chat
+                playerId={playerId}
+                onSendMessage={handleSendMessage}
+                messages={messages}
+                disabled={false}
+                placeholder="Chat with other players..."
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
+  // Regular game UI when game is in playing or between-rounds state
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-400 to-purple-500 p-4">
       <div className="max-w-7xl mx-auto">
