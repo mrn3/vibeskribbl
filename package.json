@@ -7,7 +7,7 @@
     "dev:server": "tsc && node server.js",
     "build": "next build && tsc",
     "start": "node server.js",
-    "start:pm2": "npx pm2 start server.js --name vibeskribbl",
+    "start:pm2": "NODE_ENV=production npx pm2 start server.js --name vibeskribbl --env production",
     "lint": "next lint"
   },
   "dependencies": {
