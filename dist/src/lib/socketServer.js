@@ -237,6 +237,8 @@ Round: ${room.currentRound}/${room.maxRounds}`;
                 if (guessMatches && playerIsNotDrawer) {
                     // Player guessed correctly
                     console.log(`CORRECT GUESS by ${player.name}!`);
+                    // Save previous score before updating
+                    player.previousScore = player.score;
                     player.score += 100;
                     player.hasGuessedCorrectly = true;
                     // Join the player to a guessed-room to track who has guessed
@@ -254,17 +256,36 @@ Round: ${room.currentRound}/${room.maxRounds}`;
                     console.log(`Non-drawing players: ${nonDrawingPlayers.length}, All guessed: ${allGuessed}`);
                     if (allGuessed) {
                         console.log('All players have guessed the word, moving to next round');
+                        // Clear the hint timer immediately when all have guessed
+                        if (room.hintTimer) {
+                            clearInterval(room.hintTimer);
+                            room.hintTimer = undefined;
+                            console.log('Cleared hint timer as all players have guessed');
+                        }
+                        // Send round summary to all players with current word and scores
+                        const drawer = room.players.find(p => p.id === room.currentDrawer);
+                        if (drawer) {
+                            io.to(roomId).emit('round-summary', {
+                                word: room.currentWord,
+                                players: room.players,
+                                drawer: {
+                                    id: drawer.id,
+                                    name: drawer.name
+                                }
+                            });
+                            console.log('Sent round summary to all players');
+                        }
                         // Notify all players about moving to next round
                         io.to(roomId).emit('chat-update', {
                             playerId: 'system',
                             playerName: 'System',
-                            message: `All players guessed the word! Next round starting in 3 seconds...`
+                            message: `All players guessed the word! Next round starting in 10 seconds...`
                         });
                         // Delay before starting next round to give time for celebration
                         setTimeout(() => {
                             // Move to next round after delay
                             nextRound(io, room);
-                        }, 3000); // 3 second delay
+                        }, 10000); // Increase to 10 second delay to match the summary display
                     }
                     // Don't emit this as a regular chat message
                     return;
@@ -337,6 +358,12 @@ Round: ${room.currentRound}/${room.maxRounds}`;
                     room.players.splice(playerIndex, 1);
                     // If this was the drawer, move to next round
                     if (room.currentDrawer === socket.id && room.gameState === 'playing') {
+                        // Clear hint timer if drawer disconnects
+                        if (room.hintTimer) {
+                            clearInterval(room.hintTimer);
+                            room.hintTimer = undefined;
+                            console.log(`Cleared hint timer as drawer ${socket.id} disconnected`);
+                        }
                         nextRound(io, room);
                     }
                     // If not enough players, reset game
@@ -369,16 +396,24 @@ function startGame(io, room) {
     });
     // Select first drawer and start round
     nextRound(io, room);
+    // Ensure round is still set to 1 after nextRound to prevent any increment issues
+    room.currentRound = 1;
     // Notify everyone that game started
     io.to(room.id).emit('game-started', {
         currentRound: room.currentRound,
         maxRounds: room.maxRounds
     });
+    // Send updated room state to all clients with the correct round number
+    io.to(room.id).emit('room-update', room);
 }
 function nextRound(io, room) {
     // Clear any timers
-    // (In a real implementation, you'd store and clear the timer)
     console.log('Starting next round for room:', room.id);
+    // Safety check to prevent stack overflow - if we're already in between rounds, don't proceed
+    if (room.gameState === 'between-rounds') {
+        console.log('Already in between-rounds state, preventing duplicate round transition');
+        return;
+    }
     // Check if game should end
     if (room.currentRound > room.maxRounds) {
         console.log('Max rounds reached, ending game');
@@ -396,6 +431,7 @@ function nextRound(io, room) {
     if (room.hintTimer) {
         clearInterval(room.hintTimer);
         room.hintTimer = undefined;
+        console.log('Cleared hint timer in nextRound');
     }
     // Remove all players from the guessed room for this round
     const guessedRoom = `${room.id}-guessed`;
@@ -467,9 +503,11 @@ function nextRound(io, room) {
     });
     // Send current room state to all players
     io.to(room.id).emit('room-update', room);
-    // Increment round counter if we've gone through all players
-    if (nextDrawerIndex === 0) {
+    // Only increment round counter if next drawer is 0 AND this is not the first round
+    // (when currentDrawerIndex is -1, it means we're starting the first round)
+    if (nextDrawerIndex === 0 && currentDrawerIndex !== -1) {
         room.currentRound++;
+        console.log(`Incremented round counter to ${room.currentRound}`);
     }
 }
 function endGame(io, room) {
@@ -495,40 +533,48 @@ function startRoundTimer(io, room) {
     });
     // Set up a timer to reveal a letter every 10 seconds
     room.hintTimer = setInterval(() => {
-        if (rooms.has(room.id) && room.gameState === 'playing' && room.currentWord) {
-            // Get unrevealed letter indices
-            const wordLength = room.currentWord.length;
-            const unrevealedIndices = Array.from({ length: wordLength }, (_, i) => i)
-                .filter(i => !room.revealedLetters.includes(i));
-            // If all letters are revealed or no unrevealed indices, stop the timer
-            if (unrevealedIndices.length === 0) {
-                if (room.hintTimer) {
-                    clearInterval(room.hintTimer);
-                    room.hintTimer = undefined;
-                }
-                return;
+        // First check if the game is still in playing state and the room still exists
+        if (!rooms.has(room.id) || room.gameState !== 'playing' || !room.currentWord) {
+            console.log(`Stopping hint timer - room ${room.id} no longer valid or not in playing state`);
+            if (room.hintTimer) {
+                clearInterval(room.hintTimer);
+                room.hintTimer = undefined;
             }
-            // Randomly select an unrevealed letter
-            const randomIndex = Math.floor(Math.random() * unrevealedIndices.length);
-            const letterToReveal = unrevealedIndices[randomIndex];
-            room.revealedLetters.push(letterToReveal);
-            console.log(`Revealing letter at index ${letterToReveal} for word "${room.currentWord}"`);
-            // Prepare masked word with revealed letters
-            const maskedWord = room.currentWord.split('').map((letter, index) => {
-                return room.revealedLetters.includes(index) ? letter : '_';
-            }).join(' ');
-            // Send the hint to all non-drawer players
-            io.to(room.id).emit('word-hint', {
-                hint: maskedWord,
-                revealedIndices: room.revealedLetters
-            });
-            // Also send as system chat message
-            io.to(room.id).emit('chat-update', {
-                playerId: 'system',
-                playerName: 'System',
-                message: `Hint: ${maskedWord}`
-            });
+            return;
         }
+        // Get unrevealed letter indices
+        const wordLength = room.currentWord.length;
+        const unrevealedIndices = Array.from({ length: wordLength }, (_, i) => i)
+            .filter(i => !room.revealedLetters.includes(i));
+        // If all letters are revealed or no unrevealed indices, stop the timer
+        if (unrevealedIndices.length === 0) {
+            if (room.hintTimer) {
+                clearInterval(room.hintTimer);
+                room.hintTimer = undefined;
+                console.log('All letters revealed, stopping hint timer');
+            }
+            return;
+        }
+        // Randomly select an unrevealed letter
+        const randomIndex = Math.floor(Math.random() * unrevealedIndices.length);
+        const letterToReveal = unrevealedIndices[randomIndex];
+        room.revealedLetters.push(letterToReveal);
+        console.log(`Revealing letter at index ${letterToReveal} for word "${room.currentWord}"`);
+        // Prepare masked word with revealed letters
+        const maskedWord = room.currentWord.split('').map((letter, index) => {
+            return room.revealedLetters.includes(index) ? letter : '_';
+        }).join(' ');
+        // Send the hint to all non-drawer players
+        io.to(room.id).emit('word-hint', {
+            hint: maskedWord,
+            revealedIndices: room.revealedLetters
+        });
+        // Also send as system chat message
+        io.to(room.id).emit('chat-update', {
+            playerId: 'system',
+            playerName: 'System',
+            message: `Hint: ${maskedWord}`
+        });
     }, 10000); // 10 seconds interval
     // Simulate a timer ending after roundTime seconds
     setTimeout(() => {
@@ -537,6 +583,20 @@ function startRoundTimer(io, room) {
             if (room.hintTimer) {
                 clearInterval(room.hintTimer);
                 room.hintTimer = undefined;
+                console.log('Round ended, clearing hint timer');
+            }
+            // Send round summary to all players with current word and scores
+            const drawer = room.players.find(p => p.id === room.currentDrawer);
+            if (drawer) {
+                io.to(room.id).emit('round-summary', {
+                    word: room.currentWord,
+                    players: room.players,
+                    drawer: {
+                        id: drawer.id,
+                        name: drawer.name
+                    }
+                });
+                console.log('Sent round summary to all players');
             }
             // Announce that time is up
             io.to(room.id).emit('round-ended', {
@@ -546,12 +606,12 @@ function startRoundTimer(io, room) {
             io.to(room.id).emit('chat-update', {
                 playerId: 'system',
                 playerName: 'System',
-                message: `Time's up! The word was "${room.currentWord}". Next round starting in 3 seconds...`
+                message: `Time's up! The word was "${room.currentWord}". Next round starting in 10 seconds...`
             });
             // Add delay before starting next round
             setTimeout(() => {
                 nextRound(io, room);
-            }, 3000); // 3 second delay
+            }, 10000); // Increase to 10 second delay to match the summary display
         }
     }, room.roundTime * 1000);
 }

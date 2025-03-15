@@ -10,6 +10,7 @@ import GameHeader from '@/components/GameHeader';
 import WordSelector from '@/components/WordSelector';
 import { getSocket, disconnectSocket, resetSocketConnection } from '@/lib/socketClient';
 import { Socket } from 'socket.io-client';
+import RoundSummary from '@/components/RoundSummary';
 
 interface Player {
   id: string;
@@ -97,6 +98,15 @@ interface WordHintData {
   hint: string;
 }
 
+interface RoundSummaryData {
+  word: string;
+  players: Player[];
+  drawer: {
+    id: string;
+    name: string;
+  };
+}
+
 export default function GamePageContent() {
   const searchParams = useSearchParams();
   const playerNameParam = searchParams.get('name');
@@ -131,6 +141,10 @@ export default function GamePageContent() {
   
   // Socket reference to maintain across renders
   const socketRef = useRef<Socket | null>(null);
+  
+  // Add state for round summary modal
+  const [roundSummary, setRoundSummary] = useState<RoundSummaryData | null>(null);
+  const [showRoundSummary, setShowRoundSummary] = useState<boolean>(false);
   
   // Define message handlers first so they can be referenced in the dependency array
   // Helper to add a message to the chat
@@ -183,6 +197,7 @@ export default function GamePageContent() {
     socket.off('chat-update');
     socket.off('canvas-cleared');
     socket.off('word-hint');
+    socket.off('round-summary');
     
     socket.on('draw-update', handleDrawEvent);
     
@@ -253,6 +268,13 @@ export default function GamePageContent() {
       if (!room || playerId === room.currentDrawer) return;
       
       // We'll let the chat update handle displaying the hint
+    });
+    
+    // Add the new round-summary event handler
+    socket.on('round-summary', (data: RoundSummaryData) => {
+      console.log('Received round summary:', data);
+      setRoundSummary(data);
+      setShowRoundSummary(true);
     });
   }, [handleDrawEvent, playerId, isDrawing, addSystemMessage, addMessage]);
   
@@ -580,6 +602,11 @@ export default function GamePageContent() {
     }, 3000);
   };
   
+  // Add handler to close the round summary modal
+  const handleCloseRoundSummary = useCallback(() => {
+    setShowRoundSummary(false);
+  }, []);
+  
   // Render name input screen if needed
   if (showNameInput) {
     return (
@@ -837,6 +864,17 @@ export default function GamePageContent() {
           </svg>
           <span className="text-gray-800 font-medium">{toast.message}</span>
         </div>
+      )}
+      
+      {/* Round Summary Modal */}
+      {roundSummary && (
+        <RoundSummary
+          word={roundSummary.word}
+          players={roundSummary.players}
+          drawer={roundSummary.drawer}
+          isVisible={showRoundSummary}
+          onClose={handleCloseRoundSummary}
+        />
       )}
     </div>
   );
