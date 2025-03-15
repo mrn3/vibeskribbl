@@ -23,12 +23,35 @@ interface Room {
 }
 
 const rooms = new Map<string, Room>();
+
+// Words for drawing game
 const wordList = [
   'dog', 'cat', 'house', 'tree', 'beach', 'phone', 'computer', 'chair', 
   'table', 'book', 'car', 'bicycle', 'mountain', 'river', 'ocean', 'sun', 
   'moon', 'star', 'pizza', 'hamburger', 'cake', 'flower', 'bird', 'fish',
   'clock', 'shoe', 'hat', 'glasses', 'shirt', 'pants', 'door', 'window'
 ];
+
+// Lists for generating fun room IDs
+const adjectives = [
+  'happy', 'funny', 'silly', 'clever', 'wild', 'fluffy', 'bouncy', 'crazy',
+  'magical', 'dancing', 'sparkly', 'jumpy', 'giggly', 'playful', 'fancy',
+  'colorful', 'jazzy', 'cosmic', 'mighty', 'super', 'dazzling', 'glowing'
+];
+
+const nouns = [
+  'panda', 'dragon', 'tiger', 'unicorn', 'penguin', 'monkey', 'robot', 'wizard',
+  'dinosaur', 'dolphin', 'raccoon', 'koala', 'rocket', 'ninja', 'pizza',
+  'pirate', 'monster', 'banana', 'cupcake', 'rainbow', 'octopus', 'llama'
+];
+
+// Function to generate a fun room ID
+function generateFunRoomId(): string {
+  const adjective = adjectives[Math.floor(Math.random() * adjectives.length)];
+  const noun = nouns[Math.floor(Math.random() * nouns.length)];
+  const number = Math.floor(Math.random() * 100); // Optional number for uniqueness
+  return `${adjective}-${noun}-${number}`;
+}
 
 // Map to track word selection timers
 const wordSelectionTimers = new Map<string, NodeJS.Timeout>();
@@ -83,8 +106,8 @@ export function setupSocketServer(server: HTTPServer) {
       let room: Room;
 
       if (!roomId) {
-        // Create a new room if no roomId provided
-        roomId = uuidv4();
+        // Create a new room with a fun ID instead of UUID
+        roomId = generateFunRoomId();
         room = {
           id: roomId,
           players: [],

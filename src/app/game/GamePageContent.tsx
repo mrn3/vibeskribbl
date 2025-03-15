@@ -542,14 +542,17 @@ export default function GamePageContent() {
           
           {/* Chat */}
           <div className="lg:col-span-3">
-            <div className="h-full max-h-[calc(100vh-200px)]">
-              <Chat
-                playerId={playerId}
-                onSendMessage={handleSendMessage}
-                messages={messages}
-                disabled={isDrawing}
-                placeholder={isDrawing ? "You're drawing! Can't chat now." : "Type your guess here..."}
-              />
+            <div className="bg-white rounded-lg shadow-md p-2 h-full overflow-hidden" style={{ maxHeight: 'calc(100vh - 220px)' }}>
+              <h3 className="font-semibold px-2 pb-2">Chat</h3>
+              <div className="h-[calc(100%-40px)]">
+                <Chat
+                  playerId={playerId}
+                  onSendMessage={handleSendMessage}
+                  messages={messages}
+                  disabled={isDrawing}
+                  placeholder={isDrawing ? "You're drawing! Can't chat now." : "Type your guess here..."}
+                />
+              </div>
             </div>
           </div>
         </div>

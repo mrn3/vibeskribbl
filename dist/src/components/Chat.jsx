@@ -6,6 +6,7 @@ const react_1 = require("react");
 function Chat({ playerId, onSendMessage, messages, disabled = false, placeholder = 'Type your guess here...' }) {
     const [message, setMessage] = (0, react_1.useState)('');
     const messagesEndRef = (0, react_1.useRef)(null);
+    const messagesContainerRef = (0, react_1.useRef)(null);
     const handleSubmit = (e) => {
         e.preventDefault();
         if (message.trim() && !disabled) {
@@ -18,8 +19,8 @@ function Chat({ playerId, onSendMessage, messages, disabled = false, placeholder
         // Scroll to bottom when new messages arrive
         (_a = messagesEndRef.current) === null || _a === void 0 ? void 0 : _a.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
-    return (<div className="flex flex-col h-full bg-white border rounded-lg shadow-md">
-      <div className="flex-1 overflow-y-auto p-4 space-y-2">
+    return (<div className="flex flex-col h-full bg-white rounded-lg overflow-hidden">
+      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-3 space-y-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent" style={{ overscrollBehavior: 'contain' }}>
         {messages.map((msg) => (<div key={msg.id} className={`p-2 rounded ${msg.isSystemMessage
                 ? msg.isCorrectGuess
                     ? 'bg-green-500 text-white font-bold animate-pulse border-2 border-yellow-400'

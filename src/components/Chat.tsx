@@ -28,6 +28,7 @@ export default function Chat({
 }: ChatProps) {
   const [message, setMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -43,8 +44,12 @@ export default function Chat({
   }, [messages]);
   
   return (
-    <div className="flex flex-col h-full bg-white border rounded-lg shadow-md">
-      <div className="flex-1 overflow-y-auto p-4 space-y-2">
+    <div className="flex flex-col h-full bg-white rounded-lg overflow-hidden">
+      <div 
+        ref={messagesContainerRef}
+        className="flex-1 overflow-y-auto p-3 space-y-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent"
+        style={{ overscrollBehavior: 'contain' }}
+      >
         {messages.map((msg) => (
           <div 
             key={msg.id}
