@@ -25,8 +25,7 @@ const nouns = [
 function generateFunRoomId() {
     const adjective = adjectives[Math.floor(Math.random() * adjectives.length)];
     const noun = nouns[Math.floor(Math.random() * nouns.length)];
-    const number = Math.floor(Math.random() * 100); // Optional number for uniqueness
-    return `${adjective}-${noun}-${number}`;
+    return `${adjective}-${noun}`;
 }
 // Map to track word selection timers
 const wordSelectionTimers = new Map();

@@ -39,9 +39,9 @@ function Chat({ playerId, onSendMessage, messages, disabled = false, placeholder
       </div>
       
       <form onSubmit={handleSubmit} className="border-t p-2">
-        <div className="flex items-center">
-          <input type="text" className="flex-1 p-2 border rounded-l focus:outline-none focus:ring-2 focus:ring-blue-300 text-black" placeholder={placeholder} value={message} onChange={(e) => setMessage(e.target.value)} disabled={disabled}/>
-          <button type="submit" className={`px-4 py-2 rounded-r ${disabled
+        <div className="flex items-center gap-2">
+          <input type="text" className="flex-1 p-2 pr-4 border rounded focus:outline-none focus:ring-2 focus:ring-blue-300 text-black" placeholder={placeholder} value={message} onChange={(e) => setMessage(e.target.value)} disabled={disabled}/>
+          <button type="submit" className={`px-4 py-2 rounded ${disabled
             ? 'bg-gray-400 text-gray-100 cursor-not-allowed'
             : 'bg-blue-600 hover:bg-blue-700 text-white'}`} disabled={disabled}>
             Send
