@@ -8,6 +8,7 @@ interface Player {
   score: number;
   previousScore?: number;
   isDrawing: boolean;
+  hasGuessedCorrectly?: boolean;
 }
 
 interface RoundSummaryProps {
@@ -24,50 +25,51 @@ interface RoundSummaryProps {
 export default function RoundSummary({ word, players, drawer, isVisible, onClose }: RoundSummaryProps) {
   const [timeLeft, setTimeLeft] = useState(10);
   
-  // Auto-close after timeout
+  // Sort players by score in descending order
+  const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
+  
+  // Auto-close after 10 seconds
   useEffect(() => {
-    if (!isVisible) {
-      setTimeLeft(10);
-      return;
+    if (isVisible && timeLeft > 0) {
+      const timer = setTimeout(() => {
+        setTimeLeft(timeLeft - 1);
+      }, 1000);
+      
+      return () => clearTimeout(timer);
+    } else if (isVisible && timeLeft === 0 && onClose) {
+      onClose();
     }
-    
-    if (timeLeft <= 0) {
-      if (onClose) onClose();
-      return;
-    }
-    
-    const timer = setTimeout(() => {
-      setTimeLeft(prev => prev - 1);
-    }, 1000);
-    
-    return () => clearTimeout(timer);
   }, [isVisible, timeLeft, onClose]);
   
   if (!isVisible) return null;
   
-  // Sort players by score
-  const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
-  
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl p-6 max-w-lg w-full mx-4 animate-fade-in">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-bold text-gray-800">Round Summary</h2>
-          <div className="px-3 py-1 bg-blue-100 rounded-full text-blue-800 font-medium">
-            Closing in {timeLeft}s
-          </div>
+          <button 
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-700"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
         
-        <div className="mb-4 p-3 bg-indigo-50 rounded-lg">
-          <p className="font-medium text-gray-700">
-            The word was: <span className="font-bold text-indigo-700">{word}</span>
+        <div className="mb-4">
+          <p className="text-lg">
+            The word was: <span className="font-bold text-blue-600">{word}</span>
           </p>
-          <p className="text-gray-600">
+          <p className="text-sm text-gray-600">
             Drawn by: <span className="font-medium">{drawer.name}</span>
           </p>
+          <p className="text-xs text-gray-500 mt-1">
+            Auto-closing in {timeLeft} seconds...
+          </p>
         </div>
         
-        <h3 className="font-semibold text-lg mb-2 text-gray-700">Player Scores</h3>
         <div className="divide-y">
           {sortedPlayers.map(player => {
             const pointsGained = player.score - (player.previousScore || 0);
@@ -119,6 +121,10 @@ export default function RoundSummary({ word, players, drawer, isVisible, onClose
             <li className="flex items-center">
               <div className="w-3 h-3 bg-purple-500 rounded-full mr-2"></div>
               <span>First correct guess: <strong>+30 bonus points</strong></span>
+            </li>
+            <li className="flex items-center">
+              <div className="w-3 h-3 bg-indigo-500 rounded-full mr-2"></div>
+              <span>Drawer reward: <strong>+20 points per correct guess</strong></span>
             </li>
           </ul>
         </div>

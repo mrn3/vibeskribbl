@@ -267,6 +267,19 @@ Round: ${room.currentRound}/${room.maxRounds}`;
                     player.previousScore = player.score;
                     player.score += pointsEarned;
                     player.hasGuessedCorrectly = true;
+                    // REWARD THE DRAWER: Award the drawer 20 points for this correct guess
+                    const drawer = room.players.find(p => p.id === room.currentDrawer);
+                    if (drawer) {
+                        drawer.previousScore = drawer.score;
+                        drawer.score += 20; // Award 20 points to the drawer
+                        console.log(`Awarding drawer ${drawer.name} with 20 points for ${player.name}'s correct guess`);
+                        // Notify the drawer about their points
+                        io.to(drawer.id).emit('word-guessed', {
+                            word: room.currentWord,
+                            pointsEarned: 20,
+                            message: `+20 points! ${player.name} guessed your drawing correctly!`
+                        });
+                    }
                     // Join the player to a guessed-room to track who has guessed
                     socket.join(`${roomId}-guessed`);
                     console.log(`Player ${player.name} guessed the word: ${room.currentWord}, earned ${pointsEarned} points`);
