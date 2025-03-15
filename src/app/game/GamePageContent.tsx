@@ -115,6 +115,12 @@ export default function GamePageContent() {
   const [clearCanvas, setClearCanvas] = useState<boolean>(false);
   const [remoteDrawData, setRemoteDrawData] = useState<DrawData | undefined>(undefined);
   
+  // Add toast state
+  const [toast, setToast] = useState<{visible: boolean, message: string}>({
+    visible: false,
+    message: ''
+  });
+  
   // Keep track of socket connection status
   const hasConnected = useRef<boolean>(false);
   const connectionInProgress = useRef<boolean>(false);
@@ -545,8 +551,20 @@ export default function GamePageContent() {
   const copyLinkToClipboard = () => {
     const link = getRoomLink();
     navigator.clipboard.writeText(link);
-    // Could add a toast notification here
-    alert("Room link copied to clipboard!");
+    
+    // Show toast instead of alert
+    setToast({
+      visible: true,
+      message: "Room link copied to clipboard!"
+    });
+    
+    // Hide toast after 3 seconds
+    setTimeout(() => {
+      setToast({
+        visible: false,
+        message: ''
+      });
+    }, 3000);
   };
   
   // Render name input screen if needed
@@ -655,6 +673,16 @@ export default function GamePageContent() {
                 <p className="text-xl font-bold">{room.players.length} / 8</p>
               </div>
             </div>
+            
+            {/* Toast notification */}
+            {toast.visible && (
+              <div className="fixed bottom-4 right-4 bg-white text-gray-800 px-4 py-3 rounded-lg shadow-lg animate-fade-in-up flex items-center z-50 border-l-4 border-green-500">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                <span className="text-gray-800 font-medium">{toast.message}</span>
+              </div>
+            )}
             
             <div className="mb-6">
               <h2 className="text-xl font-bold mb-3">Players in Room:</h2>
@@ -786,6 +814,16 @@ export default function GamePageContent() {
           onSelect={handleWordSelect}
           timeLeft={10}
         />
+      )}
+      
+      {/* Toast notification */}
+      {toast.visible && (
+        <div className="fixed bottom-4 right-4 bg-white text-gray-800 px-4 py-3 rounded-lg shadow-lg animate-fade-in-up flex items-center z-50 border-l-4 border-green-500">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+          </svg>
+          <span className="text-gray-800 font-medium">{toast.message}</span>
+        </div>
       )}
     </div>
   );
