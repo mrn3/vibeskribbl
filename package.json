@@ -12,6 +12,7 @@
     "pm2:restart": "npx pm2 restart vibeskribbl",
     "pm2:logs": "npx pm2 logs vibeskribbl",
     "pm2:monit": "npx pm2 monit",
+    "deploy": "chmod +x deploy.sh && ./deploy.sh",
     "lint": "next lint"
   },
   "dependencies": {
