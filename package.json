@@ -7,7 +7,11 @@
     "dev:server": "tsc && node server.js",
     "build": "next build && tsc",
     "start": "node server.js",
-    "start:pm2": "NODE_ENV=production npx pm2 start server.js --name vibeskribbl --env production",
+    "start:pm2": "npx pm2 start ecosystem.config.js --env production",
+    "pm2:stop": "npx pm2 stop vibeskribbl",
+    "pm2:restart": "npx pm2 restart vibeskribbl",
+    "pm2:logs": "npx pm2 logs vibeskribbl",
+    "pm2:monit": "npx pm2 monit",
     "lint": "next lint"
   },
   "dependencies": {
