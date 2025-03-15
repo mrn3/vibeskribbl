@@ -16,8 +16,13 @@ const WordSelector_1 = __importDefault(require("@/components/WordSelector"));
 const socketClient_1 = require("@/lib/socketClient");
 function GamePageContent() {
     const searchParams = (0, navigation_1.useSearchParams)();
-    const playerName = searchParams.get('name') || 'Anonymous';
+    const playerNameParam = searchParams.get('name');
     const roomIdParam = searchParams.get('roomId');
+    // Add an explicit connection state to track what's happening
+    const [connectionState, setConnectionState] = (0, react_1.useState)('initial');
+    const [showNameInput, setShowNameInput] = (0, react_1.useState)(!playerNameParam && !!roomIdParam);
+    const [playerName, setPlayerName] = (0, react_1.useState)(playerNameParam || 'Anonymous');
+    const [nameInputValue, setNameInputValue] = (0, react_1.useState)('');
     const [playerId, setPlayerId] = (0, react_1.useState)('');
     const [roomId, setRoomId] = (0, react_1.useState)(roomIdParam || '');
     const [room, setRoom] = (0, react_1.useState)(null);
@@ -29,6 +34,9 @@ function GamePageContent() {
     const [wordOptions, setWordOptions] = (0, react_1.useState)([]);
     const [clearCanvas, setClearCanvas] = (0, react_1.useState)(false);
     const [remoteDrawData, setRemoteDrawData] = (0, react_1.useState)(undefined);
+    // Keep track of socket connection status
+    const hasConnected = (0, react_1.useRef)(false);
+    const connectionInProgress = (0, react_1.useRef)(false);
     // Socket reference to maintain across renders
     const socketRef = (0, react_1.useRef)(null);
     // Define message handlers first so they can be referenced in the dependency array
@@ -63,103 +71,42 @@ function GamePageContent() {
         console.log('Received draw event from server:', data.type);
         setRemoteDrawData(data);
     }, []);
-    // Connect to socket and join/create room - only on initial mount
-    (0, react_1.useEffect)(() => {
-        console.log('GamePageContent mounted - initializing socket connection');
-        // Only create a socket if we don't already have one
-        if (!socketRef.current) {
-            const socket = (0, socketClient_1.getSocket)();
-            socketRef.current = socket;
-            if (!socket) {
-                console.error('Failed to create socket connection');
-                addSystemMessage('Error: Could not connect to game server');
-                return () => { };
-            }
-            // Join or create room
-            socket.emit('join-room', {
-                roomId: roomIdParam,
-                playerName
-            });
-        }
-        // Clean up on unmount
-        return () => {
-            console.log('GamePageContent unmounting - disconnecting socket');
-            (0, socketClient_1.disconnectSocket)();
-            socketRef.current = null;
-        };
-    }, [addSystemMessage, playerName, roomIdParam]); // Add addSystemMessage to dependency array
-    // Set up socket event listeners - these can update when playerId changes
-    (0, react_1.useEffect)(() => {
-        const socket = socketRef.current;
-        if (!socket)
-            return;
-        console.log('Setting up socket event listeners');
-        // Handle room joined
-        const handleRoomJoined = ({ roomId: joinedRoomId, playerId: joinedPlayerId }) => {
-            setRoomId(joinedRoomId);
-            setPlayerId(joinedPlayerId);
-            // Add system message
-            addSystemMessage(`You joined room ${joinedRoomId}`);
-        };
-        // Handle room updates
-        const handleRoomUpdate = (updatedRoom) => {
-            setRoom(updatedRoom);
-            // Check if current player is the drawer
-            const isCurrentPlayerDrawing = updatedRoom.currentDrawer === playerId;
-            console.log('Room update received:', {
-                roomId: updatedRoom.id,
-                currentDrawer: updatedRoom.currentDrawer,
-                playerId,
-                isCurrentPlayerDrawing,
-                gameState: updatedRoom.gameState,
-                players: updatedRoom.players.map(p => ({ id: p.id, name: p.name, isDrawing: p.isDrawing }))
-            });
-            setIsDrawing(isCurrentPlayerDrawing);
-        };
-        // Handle game started
-        const handleGameStarted = ({ currentRound, maxRounds }) => {
+    // Extract game event handlers to a separate function - MOVED UP before connectToSocketWithName
+    const setupGameEventHandlers = (0, react_1.useCallback)((socket) => {
+        socket.off('draw-update');
+        socket.off('game-started');
+        socket.off('new-drawer');
+        socket.off('word-options');
+        socket.off('word-to-draw');
+        socket.off('round-started');
+        socket.off('round-timer-started');
+        socket.off('round-ended');
+        socket.off('game-ended');
+        socket.off('player-guessed');
+        socket.off('word-guessed');
+        socket.off('chat-update');
+        socket.off('canvas-cleared');
+        socket.on('draw-update', handleDrawEvent);
+        socket.on('game-started', ({ currentRound, maxRounds }) => {
             addSystemMessage(`Game started! ${currentRound} of ${maxRounds} rounds`);
-        };
-        // Handle new drawer
-        const handleNewDrawer = ({ drawerId, drawerName, roundNumber }) => {
+        });
+        socket.on('new-drawer', ({ drawerId, drawerName, roundNumber }) => {
             addSystemMessage(`Round ${roundNumber}: ${drawerName} is drawing now!`);
-            console.log('New drawer assigned:', {
-                drawerId,
-                drawerName,
-                roundNumber,
-                currentPlayerId: playerId,
-                isCurrentPlayerDrawing: drawerId === playerId
-            });
-            // Explicitly update drawing state
-            const isCurrentPlayerDrawing = drawerId === playerId;
-            setIsDrawing(isCurrentPlayerDrawing);
-            // Reset word-related state
+            setIsDrawing(drawerId === playerId);
             setCurrentWord('');
             setWordHint('');
-            // Clear canvas for everyone
             setClearCanvas(true);
-        };
-        // Handle drawing updates from other users
-        socket.on('draw-update', handleDrawEvent);
-        // Register all event listeners
-        socket.on('room-joined', handleRoomJoined);
-        socket.on('room-update', handleRoomUpdate);
-        socket.on('game-started', handleGameStarted);
-        socket.on('new-drawer', handleNewDrawer);
+        });
         socket.on('word-options', ({ options }) => setWordOptions(options));
         socket.on('word-to-draw', ({ word }) => {
             setCurrentWord(word);
             addSystemMessage(`Your word to draw is: ${word}`);
-            // If we're receiving a word to draw, we MUST be the drawer
-            console.log('Received word to draw, setting drawing mode to TRUE');
             setIsDrawing(true);
         });
-        // Handle round started
-        socket.on('round-started', ({ drawerId: _drawerId, wordLength }) => {
-            // Create word hint (e.g., "_ _ _ _" for a 4-letter word)
+        socket.on('round-started', ({ drawerId, wordLength }) => {
             const hint = Array(wordLength).fill('_').join(' ');
             setWordHint(hint);
-            if (_drawerId !== playerId) {
+            if (drawerId !== playerId) {
                 addSystemMessage(`Round started! Word has ${wordLength} letters`);
             }
         });
@@ -169,14 +116,11 @@ function GamePageContent() {
         socket.on('round-ended', ({ word }) => {
             addSystemMessage(`Round ended! The word was: ${word}`);
         });
-        socket.on('game-ended', ({ players: _players, winner }) => {
+        socket.on('game-ended', ({ players, winner }) => {
             addSystemMessage(`Game ended! Winner: ${winner.name} with ${winner.score} points`);
         });
         socket.on('player-guessed', ({ playerId: guesserId, playerName: guesserName }) => {
-            // Create a more celebratory message for correct guesses
             addSystemMessage(`🎉 ${guesserName} guessed the word correctly! 🎉`, true, true);
-            // Add celebration sound/notification (future enhancement)
-            // If there's a drawing player, update their status as well
             if (isDrawing) {
                 addSystemMessage(`${guesserName} figured out your drawing!`, false, true);
             }
@@ -190,26 +134,177 @@ function GamePageContent() {
         socket.on('canvas-cleared', () => {
             setClearCanvas(true);
         });
-        // Clean up event listeners when dependency changes
+    }, [handleDrawEvent, playerId, isDrawing, addSystemMessage, addMessage]);
+    // Function to handle name submission
+    const handleNameSubmit = (e) => {
+        e.preventDefault();
+        if (nameInputValue.trim()) {
+            // Store the trimmed name in a local variable to ensure we use this exact value
+            const enteredName = nameInputValue.trim();
+            console.log(`Name submitted: ${enteredName}`);
+            // Update playerName state with the input value
+            setPlayerName(enteredName);
+            setShowNameInput(false);
+            // Reset connection state
+            connectionInProgress.current = false;
+            hasConnected.current = false;
+            setConnectionState('connecting');
+            // Store the entered name in sessionStorage for persistence
+            try {
+                sessionStorage.setItem('playerName', enteredName);
+            }
+            catch (e) {
+                console.error('Failed to store name in sessionStorage:', e);
+            }
+            // Directly trigger connection with the updated name
+            setTimeout(() => {
+                console.log(`Initiating connection after name submission with name: ${enteredName}`);
+                // Pass the entered name directly to ensure it's used
+                connectToSocketWithName(enteredName);
+            }, 100);
+        }
+    };
+    // Add a function to connect with a specific name
+    const connectToSocketWithName = (0, react_1.useCallback)((name) => {
+        // Avoid multiple simultaneous connections
+        if (connectionInProgress.current) {
+            console.log('Connection already in progress');
+            return;
+        }
+        connectionInProgress.current = true;
+        console.log(`Establishing socket connection to join room ${roomIdParam || roomId} as "${name}"`);
+        // Create a new socket - we can safely do this because our getSocket function handles reuse
+        const socket = (0, socketClient_1.getSocket)();
+        if (!socket) {
+            console.error('Failed to create socket');
+            setConnectionState('error');
+            connectionInProgress.current = false;
+            return;
+        }
+        socketRef.current = socket;
+        // Remove any existing listeners first to prevent duplicates
+        socket.off('connect');
+        socket.off('connect_error');
+        socket.off('room-joined');
+        socket.off('room-update');
+        socket.off('disconnect');
+        // Core connection events
+        socket.on('connect', () => {
+            console.log(`Socket connected with ID: ${socket.id}`);
+            // Directly emit join-room when connected
+            console.log(`Emitting join-room for room "${roomIdParam || roomId}" as "${name}"`);
+            socket.emit('join-room', {
+                roomId: roomIdParam || roomId,
+                playerName: name
+            });
+        });
+        socket.on('connect_error', (err) => {
+            console.error('Socket connection error:', err);
+            setConnectionState('error');
+            connectionInProgress.current = false;
+        });
+        // Game events
+        socket.on('room-joined', ({ roomId: joinedRoomId, playerId: joinedPlayerId }) => {
+            console.log(`Room joined: ${joinedRoomId}, playerId: ${joinedPlayerId}`);
+            setRoomId(joinedRoomId);
+            setPlayerId(joinedPlayerId);
+            setConnectionState('connected');
+            hasConnected.current = true;
+            connectionInProgress.current = false;
+            addSystemMessage(`You joined room ${joinedRoomId} as ${name}`);
+        });
+        socket.on('room-update', (updatedRoom) => {
+            console.log(`Room update received for room: ${updatedRoom.id}, players: ${updatedRoom.players.length}`, updatedRoom.players.map((p) => p.name));
+            setRoom(updatedRoom);
+            // Check if current player is the drawer
+            if (playerId) {
+                const isCurrentPlayerDrawing = updatedRoom.currentDrawer === playerId;
+                setIsDrawing(isCurrentPlayerDrawing);
+            }
+        });
+        socket.on('disconnect', (reason) => {
+            console.log(`Socket disconnected: ${reason}`);
+            // Only set error state if we had previously connected successfully 
+            // and this is an unexpected disconnect
+            if (hasConnected.current && reason !== 'io client disconnect') {
+                // Don't show error if we're just navigating away
+                addSystemMessage(`Disconnected from server: ${reason}. Attempting to reconnect...`);
+            }
+        });
+        // Check socket state and connect if needed
+        if (!socket.connected) {
+            console.log('Socket is not connected, connecting now...');
+            socket.connect();
+        }
+        else {
+            console.log('Socket is already connected, joining room directly');
+            socket.emit('join-room', {
+                roomId: roomIdParam || roomId,
+                playerName: name
+            });
+        }
+        // Set up game event handlers
+        setupGameEventHandlers(socket);
+    }, [roomId, roomIdParam, addSystemMessage, setupGameEventHandlers]);
+    // Update the original connectToSocket to use the new function
+    const connectToSocket = (0, react_1.useCallback)(() => {
+        // Try to get saved name from sessionStorage if available
+        let nameToUse = playerName;
+        try {
+            const savedName = sessionStorage.getItem('playerName');
+            if (savedName && savedName.trim() !== '') {
+                nameToUse = savedName;
+                setPlayerName(savedName);
+            }
+        }
+        catch (e) {
+            console.error('Failed to retrieve name from sessionStorage:', e);
+        }
+        connectToSocketWithName(nameToUse);
+    }, [playerName, connectToSocketWithName]);
+    // Initialize name input value when component mounts
+    (0, react_1.useEffect)(() => {
+        if (showNameInput) {
+            // If we're showing the name input, focus and pre-populate with a default or saved name
+            try {
+                const savedName = sessionStorage.getItem('playerName');
+                if (savedName && savedName.trim() !== '') {
+                    setNameInputValue(savedName);
+                }
+            }
+            catch (e) {
+                console.error('Failed to retrieve name from sessionStorage:', e);
+            }
+        }
+    }, [showNameInput]);
+    // Connect to socket when component mounts or when name is submitted
+    (0, react_1.useEffect)(() => {
+        // Skip if showing name input
+        if (showNameInput) {
+            console.log('Showing name input form, not connecting yet');
+            return () => { }; // Empty cleanup function
+        }
+        console.log(`Connection flow: state=${connectionState}, hasConnected=${hasConnected.current}`);
+        // If we're not connected or connecting, start the connection process
+        if ((connectionState === 'initial' || connectionState === 'error') && !connectionInProgress.current) {
+            console.log('Initiating socket connection...');
+            setConnectionState('connecting');
+            connectToSocket();
+        }
         return () => {
-            console.log('Removing socket event listeners');
-            socket.off('room-joined', handleRoomJoined);
-            socket.off('room-update', handleRoomUpdate);
-            socket.off('game-started', handleGameStarted);
-            socket.off('new-drawer', handleNewDrawer);
-            socket.off('word-options');
-            socket.off('word-to-draw');
-            socket.off('round-started');
-            socket.off('round-timer-started');
-            socket.off('round-ended');
-            socket.off('game-ended');
-            socket.off('player-guessed');
-            socket.off('word-guessed');
-            socket.off('chat-update');
-            socket.off('draw-update');
-            socket.off('canvas-cleared');
+            // We'll handle cleanup in the unmount useEffect
         };
-    }, [playerId, addSystemMessage, addMessage, handleDrawEvent]);
+    }, [showNameInput, connectToSocket, connectionState]);
+    // Cleanup socket on component unmount ONLY
+    (0, react_1.useEffect)(() => {
+        return () => {
+            console.log('Component unmounting, cleaning up socket');
+            if (socketRef.current) {
+                (0, socketClient_1.disconnectSocket)();
+                socketRef.current = null;
+            }
+        };
+    }, []);
     // Set up local timer when timeLeft changes
     (0, react_1.useEffect)(() => {
         if (timeLeft <= 0)
@@ -288,16 +383,76 @@ function GamePageContent() {
         console.log('Attempting to start the game');
         socketRef.current.emit('start-game', { roomId });
     };
-    // Render loading state
-    if (!roomId || !playerId || !room) {
+    // Function to retry connection
+    const handleRetryConnection = () => {
+        console.log('Retrying connection...');
+        (0, socketClient_1.resetSocketConnection)();
+        setConnectionState('connecting');
+        connectionInProgress.current = false;
+        hasConnected.current = false;
+        connectToSocket();
+    };
+    // Function to create a shareable room link
+    const getRoomLink = (0, react_1.useCallback)(() => {
+        // Get base URL (without any query parameters)
+        const baseUrl = window.location.origin + '/game';
+        // Only include the roomId parameter, so users can enter their name
+        return `${baseUrl}?roomId=${roomId}`;
+    }, [roomId]);
+    // Function to copy link to clipboard
+    const copyLinkToClipboard = () => {
+        const link = getRoomLink();
+        navigator.clipboard.writeText(link);
+        // Could add a toast notification here
+        alert("Room link copied to clipboard!");
+    };
+    // Render name input screen if needed
+    if (showNameInput) {
         return (<div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-blue-400 to-purple-500">
-        <div className="bg-white p-8 rounded-lg shadow-lg">
-          <h1 className="text-2xl font-bold mb-4">Joining game...</h1>
-          <p>Please wait while we connect you to the game.</p>
+        <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full">
+          <h1 className="text-3xl font-bold mb-4 text-center">Join Game</h1>
+          <p className="mb-6 text-center text-gray-600">You've been invited to join room: <span className="font-mono font-medium">{roomIdParam}</span></p>
+          
+          <form onSubmit={handleNameSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="playerName" className="block text-sm font-medium text-gray-700 mb-1">
+                Enter your name:
+              </label>
+              <input type="text" id="playerName" value={nameInputValue} onChange={(e) => setNameInputValue(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Your name" autoFocus required/>
+            </div>
+            
+            <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200">
+              Join Game
+            </button>
+          </form>
         </div>
       </div>);
     }
-    // Render waiting room UI when game is in waiting state
+    // Render connecting state
+    if (connectionState === 'connecting' || !roomId || !playerId || !room) {
+        return (<div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-blue-400 to-purple-500">
+        <div className="bg-white p-8 rounded-lg shadow-lg">
+          <h1 className="text-2xl font-bold mb-4">Joining game...</h1>
+          <p className="mb-4">Connecting to room as {playerName}</p>
+          <div className="flex justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+          </div>
+        </div>
+      </div>);
+    }
+    // Render error state
+    if (connectionState === 'error') {
+        return (<div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-blue-400 to-purple-500">
+        <div className="bg-white p-8 rounded-lg shadow-lg">
+          <h1 className="text-2xl font-bold mb-4 text-red-600">Connection Error</h1>
+          <p className="mb-4">Unable to connect to the game room.</p>
+          <button onClick={handleRetryConnection} className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600">
+            Try Again
+          </button>
+        </div>
+      </div>);
+    }
+    // Render waiting room UI when game is in waiting state and connection is successful
     if (room.gameState === 'waiting') {
         return (<div className="min-h-screen bg-gradient-to-b from-blue-400 to-purple-500 p-4">
         <div className="max-w-3xl mx-auto">
@@ -308,8 +463,18 @@ function GamePageContent() {
             <div className="flex justify-between items-center bg-gray-100 p-4 rounded-lg mb-6">
               <div>
                 <p className="font-medium">Room ID:</p>
-                <p className="font-mono bg-white px-3 py-1 rounded border select-all">{roomId}</p>
-                <p className="text-sm text-gray-500 mt-2">Share this with friends to join</p>
+                <div className="flex items-center gap-2">
+                  <a href={getRoomLink()} className="font-mono bg-white px-3 py-1 rounded border hover:bg-blue-50 transition-colors duration-200 text-blue-600 flex items-center" target="_blank" rel="noopener noreferrer" onClick={(e) => {
+                e.preventDefault();
+                copyLinkToClipboard();
+            }}>
+                    {roomId}
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                    </svg>
+                  </a>
+                </div>
+                <p className="text-sm text-gray-500 mt-2">Click to copy sharable link</p>
               </div>
               <div>
                 <p className="font-medium">Players:</p>
@@ -357,7 +522,15 @@ function GamePageContent() {
           <h1 className="text-2xl font-bold">VibeSkribbl</h1>
           <div className="flex items-center">
             <span className="mr-2">Room ID:</span>
-            <span className="font-mono bg-gray-100 px-3 py-1 rounded">{roomId}</span>
+            <a href={getRoomLink()} className="font-mono bg-gray-100 px-3 py-1 rounded hover:bg-blue-50 transition-colors duration-200 text-blue-600 flex items-center" target="_blank" rel="noopener noreferrer" onClick={(e) => {
+            e.preventDefault();
+            copyLinkToClipboard();
+        }}>
+              {roomId}
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+              </svg>
+            </a>
           </div>
         </div>
         

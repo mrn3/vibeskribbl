@@ -103,11 +103,13 @@ export function setupSocketServer(server: HTTPServer) {
 
     // Create or join a room
     socket.on('join-room', ({ roomId, playerName }) => {
+      console.log(`Join room request received: roomId=${roomId}, playerName=${playerName}`);
       let room: Room;
 
       if (!roomId) {
         // Create a new room with a fun ID instead of UUID
         roomId = generateFunRoomId();
+        console.log(`Creating new room with ID: ${roomId}`);
         room = {
           id: roomId,
           players: [],
@@ -123,6 +125,7 @@ export function setupSocketServer(server: HTTPServer) {
         
         // If room doesn't exist, create a new one
         if (!room) {
+          console.log(`Room ${roomId} not found, creating new room`);
           room = {
             id: roomId,
             players: [],
@@ -132,6 +135,8 @@ export function setupSocketServer(server: HTTPServer) {
             maxRounds: 3
           };
           rooms.set(roomId, room);
+        } else {
+          console.log(`Joining existing room ${roomId} with ${room.players.length} players`);
         }
       }
 
@@ -143,11 +148,15 @@ export function setupSocketServer(server: HTTPServer) {
         isDrawing: false
       };
 
+      console.log(`Adding player to room ${roomId}: ${player.name} (${player.id})`);
       room.players.push(player);
       socket.join(roomId);
 
       // Send room data to all clients in the room
+      console.log(`Emitting room-update to all clients in room ${roomId}`);
       io.to(roomId).emit('room-update', room);
+      
+      console.log(`Emitting room-joined to player ${player.id}`);
       socket.emit('room-joined', { roomId, playerId: player.id });
 
       // No longer auto-start the game when 2+ players join
