@@ -24,12 +24,18 @@ function cleanupSocket() {
 function getSocketUrl() {
     // In the browser, use the same host/origin
     if (typeof window !== 'undefined') {
-        // Get protocol and hostname from current location
-        const { protocol, hostname } = window.location;
-        // Use the same protocol/hostname without specifying port, which will:
-        // 1. Use the default port for the protocol (443 for https, 80 for http)
-        // 2. Allow the proxy server to handle the WebSocket connection
-        return `${protocol}//${hostname}`;
+        // Get protocol, hostname, and port from current location
+        const { protocol, hostname, port } = window.location;
+        // Check if we're running locally or in production
+        const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+        if (isLocalhost) {
+            // For local development, explicitly use the port (usually 3001)
+            return `${protocol}//${hostname}:${port || '3001'}`;
+        }
+        else {
+            // For production with SSL/proxy, don't specify port
+            return `${protocol}//${hostname}`;
+        }
     }
     // Fallback for server-side or if window is not available
     return process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001';
