@@ -380,7 +380,7 @@ Round: ${room.currentRound}/${room.maxRounds}`;
           console.log(`Non-drawing players: ${nonDrawingPlayers.length}, All guessed: ${allGuessed}`);
           
           if (allGuessed) {
-            console.log('All players have guessed the word, moving to next round');
+            console.log('All players have guessed correctly, ending round immediately');
             
             // Clear the hint timer immediately when all have guessed
             if (room.hintTimer) {
@@ -389,34 +389,46 @@ Round: ${room.currentRound}/${room.maxRounds}`;
               console.log('Cleared hint timer as all players have guessed');
             }
             
-            // Send round summary to all players with current word and scores
-            const drawer = room.players.find(p => p.id === room.currentDrawer);
-            
-            if (drawer) {
-              io.to(roomId).emit('round-summary', {
-                word: room.currentWord,
-                players: room.players,
-                drawer: {
-                  id: drawer.id,
-                  name: drawer.name
-                }
+            // Reveal the full word in the hint area
+            if (room.currentWord) {
+              io.to(roomId).emit('word-hint', { 
+                hint: room.currentWord.split('').join(' ')
               });
-              
-              console.log('Sent round summary to all players');
+              console.log('Revealed full word in hint area');
             }
             
-            // Notify all players about moving to next round
+            // Send a celebratory message to everyone in the chat
             io.to(roomId).emit('chat-update', {
               playerId: 'system',
               playerName: 'System',
-              message: `All players guessed the word! Next round starting in 10 seconds...`
+              message: `🎉 AMAZING! Everyone figured out the drawing! The word was "${room.currentWord}" 🎉`
             });
-            
-            // Delay before starting next round to give time for celebration
+
+            // Set short delay before showing round summary
             setTimeout(() => {
-              // Move to next round after delay
-              nextRound(io, room);
-            }, 10000); // Increase to 10 second delay to match the summary display
+              // Send round summary to all players with current word and scores
+              const drawer = room.players.find(p => p.id === room.currentDrawer);
+              
+              if (drawer) {
+                io.to(roomId).emit('round-summary', {
+                  word: room.currentWord,
+                  players: room.players,
+                  drawer: {
+                    id: drawer.id,
+                    name: drawer.name
+                  }
+                });
+                
+                console.log('Sent round summary to all players');
+              }
+            
+              // Notify all players about moving to next round only in summary
+              // Move to next round after delay for the round summary
+              setTimeout(() => {
+                // Move to next round after delay
+                nextRound(io, room);
+              }, 10000); // 10 second delay to review the summary
+            }, 1500); // Short 1.5 second delay to let the celebratory message be seen
           }
           
           // Don't emit this as a regular chat message
