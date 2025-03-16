@@ -24,10 +24,13 @@ function cleanupSocket() {
 function getSocketUrl() {
   // In the browser, use the same host/origin
   if (typeof window !== 'undefined') {
-    // Get protocol, hostname, and port from current location
-    const { protocol, hostname, port } = window.location;
-    // Use the same port as the page is currently on (usually 3001 for both frontend and backend in this app)
-    return `${protocol}//${hostname}:${port || '3001'}`;
+    // Get protocol and hostname from current location
+    const { protocol, hostname } = window.location;
+    
+    // Use the same protocol/hostname without specifying port, which will:
+    // 1. Use the default port for the protocol (443 for https, 80 for http)
+    // 2. Allow the proxy server to handle the WebSocket connection
+    return `${protocol}//${hostname}`;
   }
   
   // Fallback for server-side or if window is not available
@@ -77,6 +80,7 @@ export function getSocket(): Socket | null {
     transports: ['polling', 'websocket'],  // Use polling first, then try websocket
     autoConnect: true,
     forceNew: true,
+    path: '/socket.io',  // Explicitly set the socket.io path
   });
   
   console.log('New socket instance created, connecting...');
