@@ -1,49 +1,25 @@
 #!/bin/bash
 set -e
 
-echo "==== VibeSkribbl Deployment Script ===="
+echo "Starting deployment..."
 
-# 1. Stop any running instances
-echo "Stopping any existing PM2 instances..."
-npx pm2 stop vibeskribbl || true
+# Navigate to project directory
+cd "$(dirname "$0")"
 
-# 2. Clear existing build artifacts
-echo "Cleaning up previous builds..."
-rm -rf .next dist
+# Install dependencies
+echo "Installing dependencies..."
+npm ci
 
-# 3. Set environment to production
-export NODE_ENV=production
-
-# 4. Build the Next.js application and TypeScript
-echo "Building Next.js application (production mode)..."
+# Build Next.js app and TypeScript files
+echo "Building Next.js and TypeScript..."
 npm run build
 
-# 5. Verify build artifacts exist
-if [ ! -d ".next" ]; then
-  echo "ERROR: .next directory not found after build!"
-  exit 1
-fi
+# Make sure TypeScript is compiled separately with the server config
+echo "Ensuring TypeScript compilation..."
+npx tsc --project tsconfig.server.json
 
-if [ ! -d "dist" ]; then
-  echo "ERROR: dist directory not found after build!"
-  exit 1
-fi
+# Restart the PM2 service
+echo "Restarting service..."
+npm run pm2:restart
 
-# 6. Start the application with PM2 in production mode
-echo "Starting application with PM2 in production mode..."
-npx pm2 start ecosystem.config.js --env production
-
-# 7. Save PM2 configuration so it survives server reboots
-echo "Saving PM2 configuration..."
-npx pm2 save
-
-# 8. Display running processes and logs
-echo "==== Deployment Complete ===="
-echo "Running PM2 processes:"
-npx pm2 list
-
-echo "Last 10 log lines:"
-npx pm2 logs vibeskribbl --lines 10
-
-echo "Access your application at: http://YOUR_SERVER_IP:3001"
-echo "To view logs continuously, run: npm run pm2:logs" 
+echo "Deployment completed successfully!" 

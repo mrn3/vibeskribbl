@@ -13,6 +13,9 @@ module.exports = {
       NODE_ENV: 'production',
       PORT: 3001,
       HOST: '0.0.0.0'
-    }
+    },
+    interpreter: '/bin/bash',
+    interpreter_args: '-c',
+    script: 'npm run build && node server.js'
   }]
 } 
