@@ -289,9 +289,6 @@ export default function GamePageContent() {
       console.log('Received round summary:', data);
       setRoundSummary(data);
       setShowRoundSummary(true);
-      
-      // Log to chat as well for better visibility
-      addSystemMessage(`Round Summary: The word was "${data.word}"`, true, false);
     });
   }, [handleDrawEvent, playerId, isDrawing, addSystemMessage, addMessage]);
   

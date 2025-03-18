@@ -305,11 +305,6 @@ Round: ${room.currentRound}/${room.maxRounds}`;
           // Player guessed correctly
           console.log(`CORRECT GUESS by ${player.name}!`);
           
-          // Ensure previousScore is set
-          if (player.previousScore === undefined) {
-            player.previousScore = player.score;
-          }
-          
           // Calculate points based on time elapsed
           let pointsEarned = 40; // Default points (20-30 second range)
           let timeBonus = "";
@@ -415,12 +410,6 @@ Round: ${room.currentRound}/${room.maxRounds}`;
               const drawer = room.players.find(p => p.id === room.currentDrawer);
               
               if (drawer) {
-                console.log('SENDING ROUND SUMMARY (all guessed case):', {
-                  word: room.currentWord,
-                  players: room.players.map(p => ({id: p.id, name: p.name, score: p.score, previousScore: p.previousScore})),
-                  drawer: {id: drawer.id, name: drawer.name}
-                });
-                
                 io.to(roomId).emit('round-summary', {
                   word: room.currentWord,
                   players: room.players,
@@ -438,7 +427,7 @@ Round: ${room.currentRound}/${room.maxRounds}`;
               setTimeout(() => {
                 // Move to next round after delay
                 nextRound(io, room);
-              }, 15000); // Increased to 15 seconds to ensure summary is visible
+              }, 10000); // 10 second delay to review the summary
             }, 1500); // Short 1.5 second delay to let the celebratory message be seen
           }
           
@@ -607,18 +596,14 @@ function nextRound(io: SocketIOServer, room: Room) {
     return;
   }
   
-  // Store current scores as previous scores for all players
+  // Reset drawing flag and guessed status for all players
   room.players.forEach(p => {
-    p.previousScore = p.score;
     p.isDrawing = false;
     p.hasGuessedCorrectly = false;
   });
   
   // Reset revealed letters for the new round
   room.revealedLetters = [];
-  
-  // Reset firstGuesser flag for the new round
-  room.firstGuesser = false;
   
   // Clear hint timer if exists
   if (room.hintTimer) {
@@ -824,12 +809,6 @@ function startRoundTimer(io: SocketIOServer, room: Room) {
       const drawer = room.players.find(p => p.id === room.currentDrawer);
       
       if (drawer) {
-        console.log('SENDING ROUND SUMMARY (time expired case):', {
-          word: room.currentWord,
-          players: room.players.map(p => ({id: p.id, name: p.name, score: p.score, previousScore: p.previousScore})),
-          drawer: {id: drawer.id, name: drawer.name}
-        });
-        
         io.to(room.id).emit('round-summary', {
           word: room.currentWord,
           players: room.players,
@@ -857,7 +836,7 @@ function startRoundTimer(io: SocketIOServer, room: Room) {
       // Add delay before starting next round
       setTimeout(() => {
         nextRound(io, room);
-      }, 15000); // Increased to 15 seconds for round summary visibility
+      }, 10000); // Increase to 10 second delay to match the summary display
     }
   }, room.roundTime * 1000);
 }

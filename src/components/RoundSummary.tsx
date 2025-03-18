@@ -75,7 +75,7 @@ export default function RoundSummary({ word, players, drawer, isVisible, onClose
             const pointsGained = player.score - (player.previousScore || 0);
             
             return (
-              <div key={player.id} className="py-2 flex justify-between items-center" data-testid="player-item">
+              <div key={player.id} className="py-2 flex justify-between items-center">
                 <div className="flex items-center">
                   <span className="font-medium text-gray-800">{player.name}</span>
                   {player.id === drawer.id && (
