@@ -779,13 +779,6 @@ function startRoundTimer(io: SocketIOServer, room: Room) {
       hint: maskedWord,
       revealedIndices: room.revealedLetters
     });
-    
-    // Also send as system chat message
-    io.to(room.id).emit('chat-update', {
-      playerId: 'system',
-      playerName: 'System',
-      message: `Hint: ${maskedWord}`
-    });
   }, 10000); // 10 seconds interval
   
   // Simulate a timer ending after roundTime seconds
