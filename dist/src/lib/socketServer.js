@@ -3,13 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.setupSocketServer = setupSocketServer;
 const socket_io_1 = require("socket.io");
 const rooms = new Map();
-// Words for drawing game
-const wordList = [
-    'dog', 'cat', 'house', 'tree', 'beach', 'phone', 'computer', 'chair',
-    'table', 'book', 'car', 'bicycle', 'mountain', 'river', 'ocean', 'sun',
-    'moon', 'star', 'pizza', 'hamburger', 'cake', 'flower', 'bird', 'fish',
-    'clock', 'shoe', 'hat', 'glasses', 'shirt', 'pants', 'door', 'window'
-];
+import { wordList } from './wordList.js';
 // Lists for generating fun room IDs
 const adjectives = [
     'happy', 'funny', 'silly', 'clever', 'wild', 'fluffy', 'bouncy', 'crazy',
