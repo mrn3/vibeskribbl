@@ -1,6 +1,7 @@
 import { Server as SocketIOServer } from 'socket.io';
 import { Server as HTTPServer } from 'http';
 import { v4 as uuidv4 } from 'uuid';
+import { wordList } from './wordList';
 
 interface Player {
   id: string;
@@ -28,14 +29,6 @@ interface Room {
 }
 
 const rooms = new Map<string, Room>();
-
-// Words for drawing game
-const wordList = [
-  'dog', 'cat', 'house', 'tree', 'beach', 'phone', 'computer', 'chair', 
-  'table', 'book', 'car', 'bicycle', 'mountain', 'river', 'ocean', 'sun', 
-  'moon', 'star', 'pizza', 'hamburger', 'cake', 'flower', 'bird', 'fish',
-  'clock', 'shoe', 'hat', 'glasses', 'shirt', 'pants', 'door', 'window'
-];
 
 // Lists for generating fun room IDs
 const adjectives = [
