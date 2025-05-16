@@ -912,8 +912,14 @@ export default function GamePageContent() {
                   playerId={playerId}
                   onSendMessage={handleSendMessage}
                   messages={messages}
-                  disabled={isDrawing}
-                  placeholder={isDrawing ? "You're drawing! Can't chat now." : "Type your guess here..."}
+                  disabled={isDrawing || (room?.players.find(p => p.id === playerId)?.hasGuessedCorrectly ?? false)}
+                  placeholder={
+                    isDrawing 
+                      ? "You're drawing! Can't chat now." 
+                      : room?.players.find(p => p.id === playerId)?.hasGuessedCorrectly
+                        ? "You've already guessed correctly!"
+                        : "Type your guess here..."
+                  }
                 />
               </div>
             </div>

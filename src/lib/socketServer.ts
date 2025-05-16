@@ -291,10 +291,11 @@ Round: ${room.currentRound}/${room.maxRounds}`;
         // Check if the guess matches the word exactly (case insensitive)
         const guessMatches = message.toLowerCase() === room.currentWord.toLowerCase();
         const playerIsNotDrawer = player.id !== room.currentDrawer;
+        const playerHasNotGuessed = !player.hasGuessedCorrectly;
 
-        console.log(`Guess matches: ${guessMatches}, Player is not drawer: ${playerIsNotDrawer}`);
+        console.log(`Guess matches: ${guessMatches}, Player is not drawer: ${playerIsNotDrawer}, Player has not guessed: ${playerHasNotGuessed}`);
         
-        if (guessMatches && playerIsNotDrawer) {
+        if (guessMatches && playerIsNotDrawer && playerHasNotGuessed) {
           // Player guessed correctly
           console.log(`CORRECT GUESS by ${player.name}!`);
           
