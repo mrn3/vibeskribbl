@@ -408,7 +408,7 @@ export default function Canvas({
   };
   
   const colorOptions = [
-    '#000000', '#ff0000', '#0000ff', '#00ff00', '#ffff00', '#ff00ff', '#00ffff', '#ffffff'
+    '#000000', '#ff0000', '#0000ff', '#00ff00', '#ffff00', '#ff00ff', '#00ffff', '#8B4513', '#ffffff'
   ];
   
   const lineWidthOptions = [2, 5, 10, 15, 20];
