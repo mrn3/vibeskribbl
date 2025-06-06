@@ -74,7 +74,7 @@ function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = undefined, he
             }
         }
         console.log('Canvas initialized with context, size:', canvasSize);
-    }, [canvasSize.width, canvasSize.height]);
+    }, [canvasSize, color, lineWidth]);
     // Update context drawing styles when color or line width changes - without clearing the canvas
     (0, react_1.useEffect)(() => {
         const ctx = ctxRef.current;
@@ -154,8 +154,6 @@ function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = undefined, he
             console.error('Canvas context is null');
             return;
         }
-        // Calculate the device pixel ratio once
-        const dpr = window.devicePixelRatio || 1;
         const handleMouseDown = (e) => {
             if (!isDrawing) {
                 console.log('Mouse down but not allowed to draw', { isDrawing });
@@ -310,7 +308,7 @@ function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = undefined, he
             canvas.removeEventListener('touchmove', handleTouchMove);
             canvas.removeEventListener('touchend', handleTouchEnd);
         };
-    }, [drawing, isDrawing, color, lineWidth, onDraw]);
+    }, [drawing, isDrawing, color, lineWidth, onDraw, canvasSize.height, canvasSize.width]);
     // Handle clear canvas signal
     (0, react_1.useEffect)(() => {
         if (clearCanvas) {

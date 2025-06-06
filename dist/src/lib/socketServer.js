@@ -2,28 +2,9 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.setupSocketServer = setupSocketServer;
 const socket_io_1 = require("socket.io");
+const wordList_1 = require("./wordList");
+const game_1 = require("../types/game");
 const rooms = new Map();
-import { wordList } from './wordList.js';
-
-// Color validation utility
-function isValidHexColor(color) {
-    const colorRegex = /^#[0-9A-Fa-f]{6}$/;
-    return colorRegex.test(color);
-}
-
-// DrawData validation utility
-function validateDrawData(data) {
-    return (data &&
-        typeof data === 'object' &&
-        typeof data.type === 'string' &&
-        ['start', 'draw', 'end'].includes(data.type) &&
-        typeof data.x === 'number' &&
-        typeof data.y === 'number' &&
-        typeof data.color === 'string' &&
-        isValidHexColor(data.color) &&
-        typeof data.lineWidth === 'number' &&
-        data.lineWidth > 0);
-}
 // Lists for generating fun room IDs
 const adjectives = [
     'happy', 'funny', 'silly', 'clever', 'wild', 'fluffy', 'bouncy', 'crazy',
@@ -167,23 +148,20 @@ function setupSocketServer(server) {
         // Handle drawing data
         socket.on('draw', ({ roomId, drawData }) => {
             // Validate draw data using shared validation function
-            if (!validateDrawData(drawData)) {
+            if (!(0, game_1.validateDrawData)(drawData)) {
                 console.error('Invalid draw data received:', drawData);
                 return;
             }
-
             // Verify the room exists and the sender is the current drawer
             const room = rooms.get(roomId);
             if (!room) {
                 console.error(`Room ${roomId} not found for draw event`);
                 return;
             }
-
             if (room.currentDrawer !== socket.id) {
                 console.error(`Draw event from non-drawer ${socket.id} in room ${roomId}`);
                 return;
             }
-
             console.log('Forwarding draw data:', {
                 type: drawData.type,
                 color: drawData.color,
@@ -191,7 +169,6 @@ function setupSocketServer(server) {
                 from: socket.id,
                 to: roomId
             });
-
             // Forward drawing data to all clients in the room except the sender
             socket.to(roomId).emit('draw-update', drawData);
         });
@@ -273,8 +250,9 @@ Round: ${room.currentRound}/${room.maxRounds}`;
                 // Check if the guess matches the word exactly (case insensitive)
                 const guessMatches = message.toLowerCase() === room.currentWord.toLowerCase();
                 const playerIsNotDrawer = player.id !== room.currentDrawer;
-                console.log(`Guess matches: ${guessMatches}, Player is not drawer: ${playerIsNotDrawer}`);
-                if (guessMatches && playerIsNotDrawer) {
+                const playerHasNotGuessed = !player.hasGuessedCorrectly;
+                console.log(`Guess matches: ${guessMatches}, Player is not drawer: ${playerIsNotDrawer}, Player has not guessed: ${playerHasNotGuessed}`);
+                if (guessMatches && playerIsNotDrawer && playerHasNotGuessed) {
                     // Player guessed correctly
                     console.log(`CORRECT GUESS by ${player.name}!`);
                     // Calculate points based on time elapsed
@@ -670,12 +648,6 @@ function startRoundTimer(io, room) {
             hint: maskedWord,
             revealedIndices: room.revealedLetters
         });
-        // Also send as system chat message
-        io.to(room.id).emit('chat-update', {
-            playerId: 'system',
-            playerName: 'System',
-            message: `Hint: ${maskedWord}`
-        });
     }, 10000); // 10 seconds interval
     // Simulate a timer ending after roundTime seconds
     setTimeout(() => {
@@ -718,7 +690,7 @@ function startRoundTimer(io, room) {
 }
 function getRandomWords(count) {
     const words = [];
-    const wordListCopy = [...wordList];
+    const wordListCopy = [...wordList_1.wordList];
     for (let i = 0; i < count; i++) {
         if (wordListCopy.length === 0)
             break;

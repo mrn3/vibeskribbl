@@ -10,8 +10,13 @@ function isValidHexColor(color) {
 }
 // DrawData validation utility
 function validateDrawData(data) {
-    return (data &&
+    return (data !== null &&
         typeof data === 'object' &&
+        'type' in data &&
+        'x' in data &&
+        'y' in data &&
+        'color' in data &&
+        'lineWidth' in data &&
         typeof data.type === 'string' &&
         ['start', 'draw', 'end'].includes(data.type) &&
         typeof data.x === 'number' &&
