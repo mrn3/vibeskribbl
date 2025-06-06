@@ -3,7 +3,8 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
-import Canvas, { DrawData } from '@/components/Canvas';
+import Canvas from '@/components/Canvas';
+import { DrawData } from '@/types/game';
 import Chat from '@/components/Chat';
 import PlayerList from '@/components/PlayerList';
 import GameHeader from '@/components/GameHeader';
@@ -183,7 +184,13 @@ export default function GamePageContent() {
   
   // Handle drawing events from remote users
   const handleDrawEvent = useCallback((data: DrawData) => {
-    console.log('Received draw event from server:', data.type);
+    console.log('Received draw event from server:', {
+      type: data.type,
+      color: data.color,
+      lineWidth: data.lineWidth,
+      x: data.x,
+      y: data.y
+    });
     setRemoteDrawData(data);
   }, []);
   
@@ -530,8 +537,16 @@ export default function GamePageContent() {
       console.log('Cannot emit draw event - not drawing or no socket connection');
       return;
     }
-    
-    console.log('Emitting draw event to server:', drawData.type);
+
+    console.log('Emitting draw event to server:', {
+      type: drawData.type,
+      color: drawData.color,
+      lineWidth: drawData.lineWidth,
+      x: drawData.x,
+      y: drawData.y,
+      roomId
+    });
+
     socketRef.current.emit('draw', {
       roomId,
       drawData

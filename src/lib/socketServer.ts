@@ -2,31 +2,9 @@ import { Server as SocketIOServer } from 'socket.io';
 import { Server as HTTPServer } from 'http';
 import { v4 as uuidv4 } from 'uuid';
 import { wordList } from './wordList';
+import { DrawData, Player, Room, validateDrawData } from '../types/game';
 
-interface Player {
-  id: string;
-  name: string;
-  score: number;
-  previousScore?: number;
-  isDrawing: boolean;
-  hasGuessedCorrectly?: boolean;
-}
 
-interface Room {
-  id: string;
-  players: Player[];
-  currentWord?: string;
-  currentDrawer?: string;
-  gameState: 'waiting' | 'playing' | 'between-rounds';
-  roundTime: number;
-  currentRound: number;
-  maxRounds: number;
-  wordOptions?: string[];
-  revealedLetters?: number[];
-  hintTimer?: NodeJS.Timeout;
-  roundStartTime?: number;
-  firstGuesser?: boolean;
-}
 
 const rooms = new Map<string, Room>();
 
@@ -190,7 +168,33 @@ export function setupSocketServer(server: HTTPServer) {
     });
 
     // Handle drawing data
-    socket.on('draw', ({ roomId, drawData }) => {
+    socket.on('draw', ({ roomId, drawData }: { roomId: string; drawData: DrawData }) => {
+      // Validate draw data using shared validation function
+      if (!validateDrawData(drawData)) {
+        console.error('Invalid draw data received:', drawData);
+        return;
+      }
+
+      // Verify the room exists and the sender is the current drawer
+      const room = rooms.get(roomId);
+      if (!room) {
+        console.error(`Room ${roomId} not found for draw event`);
+        return;
+      }
+
+      if (room.currentDrawer !== socket.id) {
+        console.error(`Draw event from non-drawer ${socket.id} in room ${roomId}`);
+        return;
+      }
+
+      console.log('Forwarding draw data:', {
+        type: drawData.type,
+        color: drawData.color,
+        lineWidth: drawData.lineWidth,
+        from: socket.id,
+        to: roomId
+      });
+
       // Forward drawing data to all clients in the room except the sender
       socket.to(roomId).emit('draw-update', drawData);
     });

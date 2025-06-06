@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { DrawData, validateDrawData } from '../types/game';
 
 interface CanvasProps {
   isDrawing: boolean;
@@ -10,14 +11,6 @@ interface CanvasProps {
   width?: number | undefined;
   height?: number | undefined;
   remoteDrawData?: DrawData;
-}
-
-export interface DrawData {
-  type: 'start' | 'draw' | 'end';
-  x: number;
-  y: number;
-  color: string;
-  lineWidth: number;
 }
 
 export default function Canvas({ 
@@ -140,16 +133,21 @@ export default function Canvas({
       console.error('Cannot handle remote draw - context is null');
       return;
     }
-    
-    console.log('Handling remote draw:', data.type, data.x, data.y);
-    
+
+    console.log('Handling remote draw:', data.type, 'at', data.x, data.y, 'with color:', data.color, 'lineWidth:', data.lineWidth);
+
+    // Save the current local drawing state
+    const savedStrokeStyle = ctx.strokeStyle;
+    const savedLineWidth = ctx.lineWidth;
+
+    // Apply remote drawing styles
     ctx.strokeStyle = data.color;
     ctx.lineWidth = data.lineWidth;
-    
+
     // Ensure coordinates are in the correct scale
     const x = data.x;
     const y = data.y;
-    
+
     if (data.type === 'start') {
       ctx.beginPath();
       ctx.moveTo(x, y);
@@ -161,12 +159,25 @@ export default function Canvas({
       ctx.stroke();
       ctx.closePath();
     }
+
+    // Restore the local drawing state to prevent interference
+    ctx.strokeStyle = savedStrokeStyle;
+    ctx.lineWidth = savedLineWidth;
+
+    console.log('Remote draw completed, restored local styles - color:', savedStrokeStyle, 'lineWidth:', savedLineWidth);
   }, []);
   
   // Process remote drawing data when it arrives
   useEffect(() => {
     if (remoteDrawData) {
       console.log('Received remote draw data:', remoteDrawData.type);
+
+      // Validate the remote draw data before processing
+      if (!validateDrawData(remoteDrawData)) {
+        console.error('Invalid remote draw data received:', remoteDrawData);
+        return;
+      }
+
       handleRemoteDraw(remoteDrawData);
     }
   }, [remoteDrawData, handleRemoteDraw]);
