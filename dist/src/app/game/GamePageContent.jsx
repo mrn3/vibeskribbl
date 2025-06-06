@@ -16,6 +16,7 @@ const WordSelector_1 = __importDefault(require("@/components/WordSelector"));
 const socketClient_1 = require("@/lib/socketClient");
 const RoundSummary_1 = __importDefault(require("@/components/RoundSummary"));
 function GamePageContent() {
+    var _a, _b, _c;
     const searchParams = (0, navigation_1.useSearchParams)();
     const playerNameParam = searchParams.get('name');
     const roomIdParam = searchParams.get('roomId');
@@ -77,7 +78,13 @@ function GamePageContent() {
     }, []);
     // Handle drawing events from remote users
     const handleDrawEvent = (0, react_1.useCallback)((data) => {
-        console.log('Received draw event from server:', data.type);
+        console.log('Received draw event from server:', {
+            type: data.type,
+            color: data.color,
+            lineWidth: data.lineWidth,
+            x: data.x,
+            y: data.y
+        });
         setRemoteDrawData(data);
     }, []);
     // Extract game event handlers to a separate function - MOVED UP before connectToSocketWithName
@@ -374,7 +381,14 @@ function GamePageContent() {
             console.log('Cannot emit draw event - not drawing or no socket connection');
             return;
         }
-        console.log('Emitting draw event to server:', drawData.type);
+        console.log('Emitting draw event to server:', {
+            type: drawData.type,
+            color: drawData.color,
+            lineWidth: drawData.lineWidth,
+            x: drawData.x,
+            y: drawData.y,
+            roomId
+        });
         socketRef.current.emit('draw', {
             roomId,
             drawData
@@ -667,7 +681,11 @@ function GamePageContent() {
             <div className="bg-white rounded-lg shadow-md p-2 h-full overflow-hidden" style={{ maxHeight: 'calc(100vh - 220px)' }}>
               <h3 className="font-semibold px-2 pb-2">Chat</h3>
               <div className="h-[calc(100%-40px)]">
-                <Chat_1.default playerId={playerId} onSendMessage={handleSendMessage} messages={messages} disabled={isDrawing} placeholder={isDrawing ? "You're drawing! Can't chat now." : "Type your guess here..."}/>
+                <Chat_1.default playerId={playerId} onSendMessage={handleSendMessage} messages={messages} disabled={isDrawing || ((_b = (_a = room === null || room === void 0 ? void 0 : room.players.find(p => p.id === playerId)) === null || _a === void 0 ? void 0 : _a.hasGuessedCorrectly) !== null && _b !== void 0 ? _b : false)} placeholder={isDrawing
+            ? "You're drawing! Can't chat now."
+            : ((_c = room === null || room === void 0 ? void 0 : room.players.find(p => p.id === playerId)) === null || _c === void 0 ? void 0 : _c.hasGuessedCorrectly)
+                ? "You've already guessed correctly!"
+                : "Type your guess here..."}/>
               </div>
             </div>
           </div>

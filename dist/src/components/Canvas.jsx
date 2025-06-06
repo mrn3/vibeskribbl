@@ -3,6 +3,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = Canvas;
 const react_1 = require("react");
+const game_1 = require("../types/game");
 function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = undefined, height = undefined, remoteDrawData }) {
     const canvasRef = (0, react_1.useRef)(null);
     const ctxRef = (0, react_1.useRef)(null);
@@ -101,7 +102,11 @@ function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = undefined, he
             console.error('Cannot handle remote draw - context is null');
             return;
         }
-        console.log('Handling remote draw:', data.type, data.x, data.y);
+        console.log('Handling remote draw:', data.type, 'at', data.x, data.y, 'with color:', data.color, 'lineWidth:', data.lineWidth);
+        // Save the current local drawing state
+        const savedStrokeStyle = ctx.strokeStyle;
+        const savedLineWidth = ctx.lineWidth;
+        // Apply remote drawing styles
         ctx.strokeStyle = data.color;
         ctx.lineWidth = data.lineWidth;
         // Ensure coordinates are in the correct scale
@@ -120,11 +125,20 @@ function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = undefined, he
             ctx.stroke();
             ctx.closePath();
         }
+        // Restore the local drawing state to prevent interference
+        ctx.strokeStyle = savedStrokeStyle;
+        ctx.lineWidth = savedLineWidth;
+        console.log('Remote draw completed, restored local styles - color:', savedStrokeStyle, 'lineWidth:', savedLineWidth);
     }, []);
     // Process remote drawing data when it arrives
     (0, react_1.useEffect)(() => {
         if (remoteDrawData) {
             console.log('Received remote draw data:', remoteDrawData.type);
+            // Validate the remote draw data before processing
+            if (!(0, game_1.validateDrawData)(remoteDrawData)) {
+                console.error('Invalid remote draw data received:', remoteDrawData);
+                return;
+            }
             handleRemoteDraw(remoteDrawData);
         }
     }, [remoteDrawData, handleRemoteDraw]);
@@ -311,7 +325,7 @@ function Canvas({ isDrawing, onDraw, onClear, clearCanvas, width = undefined, he
         onClear();
     };
     const colorOptions = [
-        '#000000', '#ff0000', '#0000ff', '#00ff00', '#ffff00', '#ff00ff', '#00ffff', '#ffffff'
+        '#000000', '#ff0000', '#0000ff', '#00ff00', '#ffff00', '#ff00ff', '#00ffff', '#8B4513', '#ffffff'
     ];
     const lineWidthOptions = [2, 5, 10, 15, 20];
     return (<div className="flex flex-col items-center w-full" ref={containerRef}>
