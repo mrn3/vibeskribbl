@@ -1,6 +1,5 @@
 import { Server as SocketIOServer } from 'socket.io';
 import { Server as HTTPServer } from 'http';
-import { v4 as uuidv4 } from 'uuid';
 import { wordList } from './wordList';
 import { DrawData, Player, Room, validateDrawData } from '../types/game';
 

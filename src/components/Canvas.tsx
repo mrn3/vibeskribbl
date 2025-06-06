@@ -99,7 +99,7 @@ export default function Canvas({
     }
     
     console.log('Canvas initialized with context, size:', canvasSize);
-  }, [canvasSize.width, canvasSize.height]);
+  }, [canvasSize, color, lineWidth]);
   
   // Update context drawing styles when color or line width changes - without clearing the canvas
   useEffect(() => {
@@ -195,9 +195,7 @@ export default function Canvas({
       console.error('Canvas context is null');
       return; 
     }
-    
-    // Calculate the device pixel ratio once
-    const dpr = window.devicePixelRatio || 1;
+
     
     const handleMouseDown = (e: MouseEvent) => {
       if (!isDrawing) {
@@ -390,7 +388,7 @@ export default function Canvas({
       canvas.removeEventListener('touchmove', handleTouchMove);
       canvas.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [drawing, isDrawing, color, lineWidth, onDraw]);
+  }, [drawing, isDrawing, color, lineWidth, onDraw, canvasSize.height, canvasSize.width]);
   
   // Handle clear canvas signal
   useEffect(() => {

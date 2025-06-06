@@ -122,17 +122,22 @@ export function isValidHexColor(color: string): boolean {
 }
 
 // DrawData validation utility
-export function validateDrawData(data: any): data is DrawData {
+export function validateDrawData(data: unknown): data is DrawData {
   return (
-    data &&
+    data !== null &&
     typeof data === 'object' &&
-    typeof data.type === 'string' &&
-    ['start', 'draw', 'end'].includes(data.type) &&
-    typeof data.x === 'number' &&
-    typeof data.y === 'number' &&
-    typeof data.color === 'string' &&
-    isValidHexColor(data.color) &&
-    typeof data.lineWidth === 'number' &&
-    data.lineWidth > 0
+    'type' in data &&
+    'x' in data &&
+    'y' in data &&
+    'color' in data &&
+    'lineWidth' in data &&
+    typeof (data as Record<string, unknown>).type === 'string' &&
+    ['start', 'draw', 'end'].includes((data as Record<string, unknown>).type as string) &&
+    typeof (data as Record<string, unknown>).x === 'number' &&
+    typeof (data as Record<string, unknown>).y === 'number' &&
+    typeof (data as Record<string, unknown>).color === 'string' &&
+    isValidHexColor((data as Record<string, unknown>).color as string) &&
+    typeof (data as Record<string, unknown>).lineWidth === 'number' &&
+    ((data as Record<string, unknown>).lineWidth as number) > 0
   );
 }

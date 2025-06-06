@@ -42,10 +42,6 @@ interface Room {
 }
 
 // Define types for socket event data
-interface RoomJoinedData {
-  roomId: string;
-  playerId: string;
-}
 
 interface GameStartedData {
   currentRound: number;
@@ -251,11 +247,11 @@ export default function GamePageContent() {
       addSystemMessage(`Round ended! The word was: ${word}`);
     });
     
-    socket.on('game-ended', ({ players, winner }: GameEndedData) => {
+    socket.on('game-ended', ({ winner }: GameEndedData) => {
       addSystemMessage(`Game ended! Winner: ${winner.name} with ${winner.score} points`);
     });
-    
-    socket.on('player-guessed', ({ playerId: guesserId, playerName: guesserName }: PlayerGuessedData) => {
+
+    socket.on('player-guessed', ({ playerName: guesserName }: PlayerGuessedData) => {
       addSystemMessage(`🎉 ${guesserName} guessed the word correctly! 🎉`, true, true);
       
       if (isDrawing) {
@@ -297,7 +293,7 @@ export default function GamePageContent() {
       setRoundSummary(data);
       setShowRoundSummary(true);
     });
-  }, [handleDrawEvent, playerId, isDrawing, addSystemMessage, addMessage]);
+  }, [handleDrawEvent, playerId, isDrawing, addSystemMessage, addMessage, room]);
   
   // Function to handle name submission
   const handleNameSubmit = (e: React.FormEvent) => {
@@ -429,7 +425,7 @@ export default function GamePageContent() {
     // Set up game event handlers
     setupGameEventHandlers(socket);
     
-  }, [roomId, roomIdParam, addSystemMessage, setupGameEventHandlers]);
+  }, [roomId, roomIdParam, addSystemMessage, setupGameEventHandlers, playerId]);
   
   // Update the original connectToSocket to use the new function
   const connectToSocket = useCallback(() => {
@@ -702,7 +698,7 @@ export default function GamePageContent() {
       <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-blue-400 to-purple-500">
         <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full">
           <h1 className="text-3xl font-bold mb-4 text-center">Join Game</h1>
-          <p className="mb-6 text-center text-gray-600">You've been invited to join room: <span className="font-mono font-medium">{roomIdParam}</span></p>
+          <p className="mb-6 text-center text-gray-600">You&apos;ve been invited to join room: <span className="font-mono font-medium">{roomIdParam}</span></p>
           
           <form onSubmit={handleNameSubmit} className="space-y-4">
             <div>
