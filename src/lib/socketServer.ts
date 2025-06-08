@@ -91,7 +91,8 @@ export function setupSocketServer(server: HTTPServer) {
           gameState: 'waiting',
           roundTime: 30,
           currentRound: 0,
-          maxRounds: 3
+          maxRounds: 3,
+          usedWords: []
         };
         rooms.set(roomId, room);
       } else {
@@ -107,7 +108,8 @@ export function setupSocketServer(server: HTTPServer) {
             gameState: 'waiting',
             roundTime: 30,
             currentRound: 0,
-            maxRounds: 3
+            maxRounds: 3,
+            usedWords: []
           };
           rooms.set(roomId, room);
         } else {
@@ -238,8 +240,8 @@ export function setupSocketServer(server: HTTPServer) {
           roundNumber: room.currentRound
         });
         
-        // Generate word options
-        const wordOptions = getRandomWords(3);
+        // Generate word options, excluding already used words
+        const wordOptions = getRandomWords(3, room.usedWords || []);
         room.wordOptions = wordOptions;
         
         // Send word options only to the drawer
@@ -480,6 +482,10 @@ Round: ${room.currentRound}/${room.maxRounds}`;
       room.roundStartTime = Date.now(); // Record when the round started
       room.firstGuesser = false; // Reset first guesser flag
 
+      // Add word to used words list to prevent duplicates
+      if (!room.usedWords) room.usedWords = [];
+      room.usedWords.push(word);
+
       console.log(`Game state changed to: ${room.gameState}`);
 
       // Start analytics tracking for this round
@@ -580,6 +586,9 @@ function startGame(io: SocketIOServer, room: Room) {
     player.isDrawing = false;
   });
 
+  // Reset used words for new game
+  room.usedWords = [];
+
   // Start analytics tracking for this game
   room.gameId = AnalyticsCollector.startGame(room.id, room.players);
 
@@ -666,8 +675,8 @@ function nextRound(io: SocketIOServer, room: Room) {
   nextDrawer.isDrawing = true;
   room.currentDrawer = nextDrawer.id;
 
-  // Generate word options
-  const wordOptions = getRandomWords(3);
+  // Generate word options, excluding already used words
+  const wordOptions = getRandomWords(3, room.usedWords || []);
   room.wordOptions = wordOptions;
 
   // Move to between-rounds state
@@ -724,6 +733,10 @@ function nextRound(io: SocketIOServer, room: Room) {
         room.wordOptions = undefined;
         room.gameState = 'playing';
         room.roundStartTime = Date.now(); // Record when the round started
+
+        // Add word to used words list to prevent duplicates
+        if (!room.usedWords) room.usedWords = [];
+        room.usedWords.push(randomWord);
 
         console.log(`Auto-selected word: ${randomWord}, game state changed to: ${room.gameState}`);
 
@@ -902,16 +915,21 @@ function startRoundTimer(io: SocketIOServer, room: Room) {
   }, room.roundTime * 1000);
 }
 
-function getRandomWords(count: number): string[] {
+function getRandomWords(count: number, usedWords: string[] = []): string[] {
   const words: string[] = [];
-  const wordListCopy = [...wordList];
-  
+  // Filter out already used words from the word list
+  const availableWords = wordList.filter(word => !usedWords.includes(word));
+
+  // If we've used all words (very unlikely with 250+ words), reset and use full list
+  const wordListToUse = availableWords.length >= count ? availableWords : wordList;
+  const wordListCopy = [...wordListToUse];
+
   for (let i = 0; i < count; i++) {
     if (wordListCopy.length === 0) break;
     const index = Math.floor(Math.random() * wordListCopy.length);
     words.push(wordListCopy[index]);
     wordListCopy.splice(index, 1);
   }
-  
+
   return words;
-} 
+}

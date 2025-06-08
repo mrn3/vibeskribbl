@@ -32,6 +32,7 @@ export interface Room {
   roundStartTime?: number;
   firstGuesser?: boolean;
   gameId?: string; // Analytics tracking ID
+  usedWords?: string[]; // Track words used in current game to prevent duplicates
 }
 
 export interface Message {

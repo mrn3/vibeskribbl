@@ -78,7 +78,8 @@ function setupSocketServer(server) {
                     gameState: 'waiting',
                     roundTime: 30,
                     currentRound: 0,
-                    maxRounds: 3
+                    maxRounds: 3,
+                    usedWords: []
                 };
                 rooms.set(roomId, room);
             }
@@ -94,7 +95,8 @@ function setupSocketServer(server) {
                         gameState: 'waiting',
                         roundTime: 30,
                         currentRound: 0,
-                        maxRounds: 3
+                        maxRounds: 3,
+                        usedWords: []
                     };
                     rooms.set(roomId, room);
                 }
@@ -205,8 +207,8 @@ function setupSocketServer(server) {
                     drawerName: player.name,
                     roundNumber: room.currentRound
                 });
-                // Generate word options
-                const wordOptions = getRandomWords(3);
+                // Generate word options, excluding already used words
+                const wordOptions = getRandomWords(3, room.usedWords || []);
                 room.wordOptions = wordOptions;
                 // Send word options only to the drawer
                 socket.emit('word-options', { options: wordOptions });
@@ -408,6 +410,10 @@ Round: ${room.currentRound}/${room.maxRounds}`;
             room.gameState = 'playing'; // Ensure game state is set to playing
             room.roundStartTime = Date.now(); // Record when the round started
             room.firstGuesser = false; // Reset first guesser flag
+            // Add word to used words list to prevent duplicates
+            if (!room.usedWords)
+                room.usedWords = [];
+            room.usedWords.push(word);
             console.log(`Game state changed to: ${room.gameState}`);
             // Start analytics tracking for this round
             if (room.gameId && room.currentDrawer) {
@@ -487,6 +493,8 @@ function startGame(io, room) {
         player.score = 0;
         player.isDrawing = false;
     });
+    // Reset used words for new game
+    room.usedWords = [];
     // Start analytics tracking for this game
     room.gameId = analytics_1.AnalyticsCollector.startGame(room.id, room.players);
     // Select first drawer and start round
@@ -554,8 +562,8 @@ function nextRound(io, room) {
     const previousDrawer = room.players.find(p => p.id === room.currentDrawer);
     nextDrawer.isDrawing = true;
     room.currentDrawer = nextDrawer.id;
-    // Generate word options
-    const wordOptions = getRandomWords(3);
+    // Generate word options, excluding already used words
+    const wordOptions = getRandomWords(3, room.usedWords || []);
     room.wordOptions = wordOptions;
     // Move to between-rounds state
     room.gameState = 'between-rounds';
@@ -603,6 +611,10 @@ function nextRound(io, room) {
                 room.wordOptions = undefined;
                 room.gameState = 'playing';
                 room.roundStartTime = Date.now(); // Record when the round started
+                // Add word to used words list to prevent duplicates
+                if (!room.usedWords)
+                    room.usedWords = [];
+                room.usedWords.push(randomWord);
                 console.log(`Auto-selected word: ${randomWord}, game state changed to: ${room.gameState}`);
                 // Start analytics tracking for this round
                 if (room.gameId) {
@@ -748,9 +760,13 @@ function startRoundTimer(io, room) {
         }
     }, room.roundTime * 1000);
 }
-function getRandomWords(count) {
+function getRandomWords(count, usedWords = []) {
     const words = [];
-    const wordListCopy = [...wordList_1.wordList];
+    // Filter out already used words from the word list
+    const availableWords = wordList_1.wordList.filter(word => !usedWords.includes(word));
+    // If we've used all words (very unlikely with 250+ words), reset and use full list
+    const wordListToUse = availableWords.length >= count ? availableWords : wordList_1.wordList;
+    const wordListCopy = [...wordListToUse];
     for (let i = 0; i < count; i++) {
         if (wordListCopy.length === 0)
             break;
