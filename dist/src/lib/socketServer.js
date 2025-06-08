@@ -350,27 +350,23 @@ Round: ${room.currentRound}/${room.maxRounds}`;
                             const roundDuration = (Date.now() - room.roundStartTime) / 1000;
                             analytics_1.AnalyticsCollector.endRound(room.gameId, room.currentRound, roundDuration);
                         }
-                        // Set short delay before showing round summary
+                        // Set short delay before transitioning to next round
                         setTimeout(() => {
                             // Send round summary to all players with current word and scores
-                            const drawer = room.players.find(p => p.id === room.currentDrawer);
-                            if (drawer) {
+                            const currentDrawer = room.players.find(p => p.id === room.currentDrawer);
+                            if (currentDrawer) {
                                 io.to(roomId).emit('round-summary', {
                                     word: room.currentWord,
                                     players: room.players,
                                     drawer: {
-                                        id: drawer.id,
-                                        name: drawer.name
+                                        id: currentDrawer.id,
+                                        name: currentDrawer.name
                                     }
                                 });
                                 console.log('Sent round summary to all players');
                             }
-                            // Notify all players about moving to next round only in summary
-                            // Move to next round after delay for the round summary
-                            setTimeout(() => {
-                                // Move to next round after delay
-                                nextRound(io, room);
-                            }, 10000); // 10 second delay to review the summary
+                            // Immediately move to next round setup (this will set up next drawer and send word options)
+                            nextRound(io, room);
                         }, 1500); // Short 1.5 second delay to let the celebratory message be seen
                     }
                     // Don't emit this as a regular chat message
@@ -725,19 +721,6 @@ function startRoundTimer(io, room) {
                 room.hintTimer = undefined;
                 console.log('Round ended, clearing hint timer');
             }
-            // Send round summary to all players with current word and scores
-            const drawer = room.players.find(p => p.id === room.currentDrawer);
-            if (drawer) {
-                io.to(room.id).emit('round-summary', {
-                    word: room.currentWord,
-                    players: room.players,
-                    drawer: {
-                        id: drawer.id,
-                        name: drawer.name
-                    }
-                });
-                console.log('Sent round summary to all players');
-            }
             // Announce that time is up
             io.to(room.id).emit('round-ended', {
                 word: room.currentWord
@@ -747,16 +730,27 @@ function startRoundTimer(io, room) {
                 const roundDuration = (Date.now() - room.roundStartTime) / 1000;
                 analytics_1.AnalyticsCollector.endRound(room.gameId, room.currentRound, roundDuration);
             }
-            // Notify players about the delay before next round
+            // Notify players about the time being up
             io.to(room.id).emit('chat-update', {
                 playerId: 'system',
                 playerName: 'System',
-                message: `Time's up! The word was "${room.currentWord}". Next round starting in 10 seconds...`
+                message: `⏰ Time's up! The word was "${room.currentWord}"`
             });
-            // Add delay before starting next round
-            setTimeout(() => {
-                nextRound(io, room);
-            }, 10000); // Increase to 10 second delay to match the summary display
+            // Send round summary to all players with current word and scores
+            const currentDrawer = room.players.find(p => p.id === room.currentDrawer);
+            if (currentDrawer) {
+                io.to(room.id).emit('round-summary', {
+                    word: room.currentWord,
+                    players: room.players,
+                    drawer: {
+                        id: currentDrawer.id,
+                        name: currentDrawer.name
+                    }
+                });
+                console.log('Sent round summary to all players');
+            }
+            // Immediately move to next round setup (this will set up next drawer and send word options)
+            nextRound(io, room);
         }
     }, room.roundTime * 1000);
 }

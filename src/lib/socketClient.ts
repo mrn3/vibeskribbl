@@ -31,8 +31,8 @@ function getSocketUrl() {
     const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
     
     if (isLocalhost) {
-      // For local development, explicitly use the port (usually 3001)
-      return `${protocol}//${hostname}:${port || '3001'}`;
+      // For local development, always use port 3001 (where the Socket.IO server runs)
+      return `${protocol}//${hostname}:3001`;
     } else {
       // For production with SSL/proxy, don't specify port
       return `${protocol}//${hostname}`;

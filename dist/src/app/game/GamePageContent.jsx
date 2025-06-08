@@ -177,11 +177,9 @@ function GamePageContent() {
         // Add the new round-summary event handler
         socket.on('round-summary', (data) => {
             console.log('Received round summary:', data);
-            // Only show round summary if the current player is NOT the next drawer
-            if (room && room.currentDrawer !== playerId) {
-                setRoundSummary(data);
-                setShowRoundSummary(true);
-            }
+            // Show round summary to ALL players (including the next drawer)
+            setRoundSummary(data);
+            setShowRoundSummary(true);
         });
     }, [handleDrawEvent, playerId, isDrawing, addSystemMessage, addMessage, room]);
     // Function to handle name submission
@@ -419,6 +417,8 @@ function GamePageContent() {
             word
         });
         setWordOptions([]);
+        // Close round summary when word is selected
+        setShowRoundSummary(false);
     };
     // Get current drawer info
     const getCurrentDrawer = () => {
