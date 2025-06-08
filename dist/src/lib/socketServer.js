@@ -495,6 +495,10 @@ function nextRound(io, room) {
         endGame(io, room);
         return;
     }
+    // Store previous scores for round summary
+    room.players.forEach(p => {
+        p.previousScore = p.score;
+    });
     // Reset drawing flag and guessed status for all players
     room.players.forEach(p => {
         p.isDrawing = false;
@@ -526,6 +530,8 @@ function nextRound(io, room) {
     console.log('Next drawer index:', nextDrawerIndex);
     const nextDrawer = room.players[nextDrawerIndex];
     console.log('Selected next drawer:', nextDrawer.name, nextDrawer.id);
+    // Store the previous drawer info for round summary
+    const previousDrawer = room.players.find(p => p.id === room.currentDrawer);
     nextDrawer.isDrawing = true;
     room.currentDrawer = nextDrawer.id;
     // Generate word options
@@ -533,6 +539,32 @@ function nextRound(io, room) {
     room.wordOptions = wordOptions;
     // Move to between-rounds state
     room.gameState = 'between-rounds';
+    // Only increment round counter if next drawer is 0 AND this is not the first round
+    // (when currentDrawerIndex is -1, it means we're starting the first round)
+    if (nextDrawerIndex === 0 && currentDrawerIndex !== -1) {
+        room.currentRound++;
+        console.log(`Incremented round counter to ${room.currentRound}`);
+    }
+    // Send round summary to non-drawer players (if there was a previous round)
+    if (previousDrawer && room.currentWord) {
+        console.log('Sending round summary to non-drawer players');
+        // Send round summary to all players except the new drawer
+        room.players.forEach(player => {
+            if (player.id !== nextDrawer.id) {
+                const playerSocket = io.sockets.sockets.get(player.id);
+                if (playerSocket) {
+                    playerSocket.emit('round-summary', {
+                        word: room.currentWord,
+                        players: room.players,
+                        drawer: {
+                            id: previousDrawer.id,
+                            name: previousDrawer.name
+                        }
+                    });
+                }
+            }
+        });
+    }
     // Send word options only to the drawer
     const drawerSocket = io.sockets.sockets.get(nextDrawer.id);
     if (drawerSocket) {
@@ -578,12 +610,6 @@ function nextRound(io, room) {
     });
     // Send current room state to all players
     io.to(room.id).emit('room-update', room);
-    // Only increment round counter if next drawer is 0 AND this is not the first round
-    // (when currentDrawerIndex is -1, it means we're starting the first round)
-    if (nextDrawerIndex === 0 && currentDrawerIndex !== -1) {
-        room.currentRound++;
-        console.log(`Incremented round counter to ${room.currentRound}`);
-    }
 }
 function endGame(io, room) {
     room.gameState = 'waiting';

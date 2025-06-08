@@ -222,21 +222,29 @@ export default function GamePageContent() {
       setClearCanvas(true);
     });
     
-    socket.on('word-options', ({ options }: WordOptionsData) => setWordOptions(options));
-    
+    socket.on('word-options', ({ options }: WordOptionsData) => {
+      // Only show word options if the current player is the drawer
+      if (room && room.currentDrawer === playerId) {
+        setWordOptions(options);
+      }
+    });
+
     socket.on('word-to-draw', ({ word }: WordToDrawData) => {
       setCurrentWord(word);
       addSystemMessage(`Your word to draw is: ${word}`);
       setIsDrawing(true);
     });
-    
+
     socket.on('round-started', ({ drawerId, wordLength }: RoundStartedData) => {
       const hint = Array(wordLength).fill('_').join(' ');
       setWordHint(hint);
-      
+
       if (drawerId !== playerId) {
         addSystemMessage(`Round started! Word has ${wordLength} letters`);
       }
+
+      // Close round summary when round starts
+      setShowRoundSummary(false);
     });
     
     socket.on('round-timer-started', ({ duration }: RoundTimerData) => {
@@ -290,8 +298,11 @@ export default function GamePageContent() {
     // Add the new round-summary event handler
     socket.on('round-summary', (data: RoundSummaryData) => {
       console.log('Received round summary:', data);
-      setRoundSummary(data);
-      setShowRoundSummary(true);
+      // Only show round summary if the current player is NOT the next drawer
+      if (room && room.currentDrawer !== playerId) {
+        setRoundSummary(data);
+        setShowRoundSummary(true);
+      }
     });
   }, [handleDrawEvent, playerId, isDrawing, addSystemMessage, addMessage, room]);
   

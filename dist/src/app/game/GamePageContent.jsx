@@ -115,7 +115,12 @@ function GamePageContent() {
             setWordHint('');
             setClearCanvas(true);
         });
-        socket.on('word-options', ({ options }) => setWordOptions(options));
+        socket.on('word-options', ({ options }) => {
+            // Only show word options if the current player is the drawer
+            if (room && room.currentDrawer === playerId) {
+                setWordOptions(options);
+            }
+        });
         socket.on('word-to-draw', ({ word }) => {
             setCurrentWord(word);
             addSystemMessage(`Your word to draw is: ${word}`);
@@ -127,6 +132,8 @@ function GamePageContent() {
             if (drawerId !== playerId) {
                 addSystemMessage(`Round started! Word has ${wordLength} letters`);
             }
+            // Close round summary when round starts
+            setShowRoundSummary(false);
         });
         socket.on('round-timer-started', ({ duration }) => {
             setTimeLeft(duration);
@@ -170,8 +177,11 @@ function GamePageContent() {
         // Add the new round-summary event handler
         socket.on('round-summary', (data) => {
             console.log('Received round summary:', data);
-            setRoundSummary(data);
-            setShowRoundSummary(true);
+            // Only show round summary if the current player is NOT the next drawer
+            if (room && room.currentDrawer !== playerId) {
+                setRoundSummary(data);
+                setShowRoundSummary(true);
+            }
         });
     }, [handleDrawEvent, playerId, isDrawing, addSystemMessage, addMessage, room]);
     // Function to handle name submission
