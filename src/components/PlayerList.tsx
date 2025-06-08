@@ -26,10 +26,14 @@ export default function PlayerList({ players, currentPlayerId }: PlayerListProps
       </div>
       <ul className="divide-y">
         {sortedPlayers.map((player) => (
-          <li 
-            key={player.id} 
+          <li
+            key={player.id}
             className={`p-3 flex items-center justify-between ${
-              player.id === currentPlayerId ? 'bg-blue-50' : ''
+              player.hasGuessedCorrectly
+                ? 'bg-green-100'
+                : player.id === currentPlayerId
+                ? 'bg-blue-50'
+                : ''
             }`}
           >
             <div className="flex items-center">

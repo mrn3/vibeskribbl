@@ -14,7 +14,11 @@ function PlayerList({ players, currentPlayerId }) {
         Players
       </div>
       <ul className="divide-y">
-        {sortedPlayers.map((player) => (<li key={player.id} className={`p-3 flex items-center justify-between ${player.id === currentPlayerId ? 'bg-blue-50' : ''}`}>
+        {sortedPlayers.map((player) => (<li key={player.id} className={`p-3 flex items-center justify-between ${player.hasGuessedCorrectly
+                ? 'bg-green-100'
+                : player.id === currentPlayerId
+                    ? 'bg-blue-50'
+                    : ''}`}>
             <div className="flex items-center">
               {player.isDrawing && (<span className="mr-2">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600" viewBox="0 0 20 20" fill="currentColor">

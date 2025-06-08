@@ -764,6 +764,10 @@ function getRandomWords(count, usedWords = []) {
     const words = [];
     // Filter out already used words from the word list
     const availableWords = wordList_1.wordList.filter(word => !usedWords.includes(word));
+    console.log(`Word selection: ${usedWords.length} words used, ${availableWords.length} available, requesting ${count} words`);
+    if (usedWords.length > 0) {
+        console.log(`Used words: ${usedWords.join(', ')}`);
+    }
     // If we've used all words (very unlikely with 250+ words), reset and use full list
     const wordListToUse = availableWords.length >= count ? availableWords : wordList_1.wordList;
     const wordListCopy = [...wordListToUse];
