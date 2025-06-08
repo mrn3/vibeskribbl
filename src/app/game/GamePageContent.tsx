@@ -397,10 +397,10 @@ export default function GamePageContent() {
     });
     
     socket.on('room-update', (updatedRoom) => {
-      console.log(`Room update received for room: ${updatedRoom.id}, players: ${updatedRoom.players.length}`, 
+      console.log(`Room update received for room: ${updatedRoom.id}, players: ${updatedRoom.players.length}`,
         updatedRoom.players.map((p: Player) => p.name));
       setRoom(updatedRoom);
-      
+
       // Check if current player is the drawer
       if (playerId) {
         const isCurrentPlayerDrawing = updatedRoom.currentDrawer === playerId;

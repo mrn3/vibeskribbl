@@ -122,7 +122,8 @@ export function setupSocketServer(server: HTTPServer) {
         id: socket.id,
         name: playerName || `Player ${room.players.length + 1}`,
         score: 0,
-        isDrawing: false
+        isDrawing: false,
+        hasGuessedCorrectly: false
       };
 
       console.log(`Adding player to room ${roomId}: ${player.name} (${player.id})`);
@@ -580,6 +581,7 @@ function startGame(io: SocketIOServer, room: Room) {
   room.players.forEach(player => {
     player.score = 0;
     player.isDrawing = false;
+    player.hasGuessedCorrectly = false;
   });
 
   // Reset used words for new game
