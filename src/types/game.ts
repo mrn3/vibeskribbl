@@ -31,6 +31,7 @@ export interface Room {
   hintTimer?: NodeJS.Timeout;
   roundStartTime?: number;
   firstGuesser?: boolean;
+  gameId?: string; // Analytics tracking ID
 }
 
 export interface Message {

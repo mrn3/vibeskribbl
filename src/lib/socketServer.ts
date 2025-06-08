@@ -2,6 +2,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { Server as HTTPServer } from 'http';
 import { wordList } from './wordList';
 import { DrawData, Player, Room, validateDrawData } from '../types/game';
+import { AnalyticsCollector } from './analytics';
 
 
 
@@ -335,14 +336,20 @@ Round: ${room.currentRound}/${room.maxRounds}`;
           player.previousScore = player.score;
           player.score += pointsEarned;
           player.hasGuessedCorrectly = true;
-          
+
+          // Record analytics for this guess
+          if (room.gameId && room.roundStartTime) {
+            const timeElapsed = (Date.now() - room.roundStartTime) / 1000;
+            AnalyticsCollector.recordGuess(room.gameId, room.currentRound, player, timeElapsed, pointsEarned);
+          }
+
           // REWARD THE DRAWER: Award the drawer 20 points for this correct guess
           const drawer = room.players.find(p => p.id === room.currentDrawer);
           if (drawer) {
             drawer.previousScore = drawer.score;
             drawer.score += 20; // Award 20 points to the drawer
             console.log(`Awarding drawer ${drawer.name} with 20 points for ${player.name}'s correct guess`);
-            
+
             // Notify the drawer about their points
             io.to(drawer.id).emit('word-guessed', {
               word: room.currentWord,
@@ -401,11 +408,17 @@ Round: ${room.currentRound}/${room.maxRounds}`;
               message: `🎉 AMAZING! Everyone figured out the drawing! The word was "${room.currentWord}" 🎉`
             });
 
+            // End analytics tracking for this round (early completion)
+            if (room.gameId && room.roundStartTime) {
+              const roundDuration = (Date.now() - room.roundStartTime) / 1000;
+              AnalyticsCollector.endRound(room.gameId, room.currentRound, roundDuration);
+            }
+
             // Set short delay before showing round summary
             setTimeout(() => {
               // Send round summary to all players with current word and scores
               const drawer = room.players.find(p => p.id === room.currentDrawer);
-              
+
               if (drawer) {
                 io.to(roomId).emit('round-summary', {
                   word: room.currentWord,
@@ -415,10 +428,10 @@ Round: ${room.currentRound}/${room.maxRounds}`;
                     name: drawer.name
                   }
                 });
-                
+
                 console.log('Sent round summary to all players');
               }
-            
+
               // Notify all players about moving to next round only in summary
               // Move to next round after delay for the round summary
               setTimeout(() => {
@@ -466,9 +479,17 @@ Round: ${room.currentRound}/${room.maxRounds}`;
       room.gameState = 'playing'; // Ensure game state is set to playing
       room.roundStartTime = Date.now(); // Record when the round started
       room.firstGuesser = false; // Reset first guesser flag
-      
+
       console.log(`Game state changed to: ${room.gameState}`);
-      
+
+      // Start analytics tracking for this round
+      if (room.gameId && room.currentDrawer) {
+        const drawer = room.players.find(p => p.id === room.currentDrawer);
+        if (drawer) {
+          AnalyticsCollector.startRound(room.gameId, room.currentRound, word, drawer, room.players.length);
+        }
+      }
+
       // Notify everyone that word was selected
       io.to(roomId).emit('round-started', {
         drawerId: room.currentDrawer,
@@ -552,25 +573,28 @@ Round: ${room.currentRound}/${room.maxRounds}`;
 function startGame(io: SocketIOServer, room: Room) {
   room.gameState = 'playing';
   room.currentRound = 1;
-  
+
   // Reset player scores
   room.players.forEach(player => {
     player.score = 0;
     player.isDrawing = false;
   });
-  
+
+  // Start analytics tracking for this game
+  room.gameId = AnalyticsCollector.startGame(room.id, room.players);
+
   // Select first drawer and start round
   nextRound(io, room);
-  
+
   // Ensure round is still set to 1 after nextRound to prevent any increment issues
   room.currentRound = 1;
-  
+
   // Notify everyone that game started
-  io.to(room.id).emit('game-started', { 
+  io.to(room.id).emit('game-started', {
     currentRound: room.currentRound,
     maxRounds: room.maxRounds
   });
-  
+
   // Send updated room state to all clients with the correct round number
   io.to(room.id).emit('room-update', room);
 }
@@ -699,8 +723,14 @@ function nextRound(io: SocketIOServer, room: Room) {
         room.currentWord = randomWord;
         room.wordOptions = undefined;
         room.gameState = 'playing';
+        room.roundStartTime = Date.now(); // Record when the round started
 
         console.log(`Auto-selected word: ${randomWord}, game state changed to: ${room.gameState}`);
+
+        // Start analytics tracking for this round
+        if (room.gameId) {
+          AnalyticsCollector.startRound(room.gameId, room.currentRound, randomWord, nextDrawer, room.players.length);
+        }
 
         // Notify everyone that word was selected
         io.to(room.id).emit('round-started', {
@@ -738,12 +768,17 @@ function nextRound(io: SocketIOServer, room: Room) {
 
 function endGame(io: SocketIOServer, room: Room) {
   room.gameState = 'waiting';
-  
+
   // Sort players by score
   const sortedPlayers = [...room.players].sort((a, b) => b.score - a.score);
-  
+
+  // End analytics tracking for this game
+  if (room.gameId && sortedPlayers.length > 0) {
+    AnalyticsCollector.endGame(room.gameId, sortedPlayers[0]);
+  }
+
   // Notify everyone about game end and final scores
-  io.to(room.id).emit('game-ended', { 
+  io.to(room.id).emit('game-ended', {
     players: sortedPlayers,
     winner: sortedPlayers[0]
   });
@@ -842,17 +877,23 @@ function startRoundTimer(io: SocketIOServer, room: Room) {
       }
       
       // Announce that time is up
-      io.to(room.id).emit('round-ended', { 
+      io.to(room.id).emit('round-ended', {
         word: room.currentWord
       });
-      
+
+      // End analytics tracking for this round
+      if (room.gameId && room.roundStartTime) {
+        const roundDuration = (Date.now() - room.roundStartTime) / 1000;
+        AnalyticsCollector.endRound(room.gameId, room.currentRound, roundDuration);
+      }
+
       // Notify players about the delay before next round
       io.to(room.id).emit('chat-update', {
         playerId: 'system',
         playerName: 'System',
         message: `Time's up! The word was "${room.currentWord}". Next round starting in 10 seconds...`
       });
-      
+
       // Add delay before starting next round
       setTimeout(() => {
         nextRound(io, room);
