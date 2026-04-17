@@ -24,7 +24,18 @@ export function App() {
   const [chat, setChat] = useState<{ key: string; html: string }[]>([]);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const canvasWrapRef = useRef<HTMLDivElement | null>(null);
   const cmdsRef = useRef<DrawCommand[]>([]);
+
+  const layoutCanvasToWrap = useCallback(() => {
+    const wrap = canvasWrapRef.current;
+    const canvas = canvasRef.current;
+    if (!wrap || !canvas) return;
+    const w = Math.max(1, wrap.clientWidth);
+    const h = Math.round((w * CANVAS_H) / CANVAS_W);
+    canvas.style.width = `${w}px`;
+    canvas.style.height = `${h}px`;
+  }, []);
 
   const redraw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -104,6 +115,22 @@ export function App() {
   useEffect(() => {
     redraw();
   }, [redraw, state?.phase, state?.drawing]);
+
+  useEffect(() => {
+    if (!state) return;
+    const wrap = canvasWrapRef.current;
+    if (!wrap) return;
+
+    const ro = new ResizeObserver(() => layoutCanvasToWrap());
+    ro.observe(wrap);
+    layoutCanvasToWrap();
+    const raf = requestAnimationFrame(() => layoutCanvasToWrap());
+
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
+  }, [state, layoutCanvasToWrap]);
 
   useEffect(() => {
     const onResize = () => redraw();
@@ -400,7 +427,7 @@ export function App() {
               </div>
             ) : null}
 
-            <div className="canvasWrap">
+            <div className="canvasWrap" ref={canvasWrapRef}>
               <canvas
                 ref={canvasRef}
                 className={
