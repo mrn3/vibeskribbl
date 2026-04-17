@@ -65,6 +65,9 @@ else
   echo "==> skipping npm install (dependency files unchanged)"
 fi
 
+echo "==> npm run build (client dist + server dist)"
+npm run build
+
 echo "==> pm2 restart ${PM2_NAME}"
 pm2 restart "$PM2_NAME"
 REMOTE
