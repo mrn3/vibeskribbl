@@ -27,16 +27,6 @@ export function App() {
   const canvasWrapRef = useRef<HTMLDivElement | null>(null);
   const cmdsRef = useRef<DrawCommand[]>([]);
 
-  const layoutCanvasToWrap = useCallback(() => {
-    const wrap = canvasWrapRef.current;
-    const canvas = canvasRef.current;
-    if (!wrap || !canvas) return;
-    const w = Math.max(1, wrap.clientWidth);
-    const h = Math.round((w * CANVAS_H) / CANVAS_W);
-    canvas.style.width = `${w}px`;
-    canvas.style.height = `${h}px`;
-  }, []);
-
   const redraw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -44,6 +34,11 @@ export function App() {
     if (!ctx) return;
     replay(ctx, cmdsRef.current);
   }, []);
+
+  /** Canvas CSS size comes from `.canvasWrap` aspect-ratio + fill; resize observer only triggers redraw. */
+  const layoutCanvasToWrap = useCallback(() => {
+    redraw();
+  }, [redraw]);
 
   const [tool, setTool] = useState<"pen" | "fill">("pen");
   const [color, setColor] = useState(11); // black-ish in palette
@@ -159,8 +154,8 @@ export function App() {
   const clientToCanvas = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current!;
     const rect = canvas.getBoundingClientRect();
-    const rw = rect.width || 1;
-    const rh = rect.height || 1;
+    const rw = canvas.clientWidth || rect.width || 1;
+    const rh = canvas.clientHeight || rect.height || 1;
     return {
       x: ((e.clientX - rect.left) / rw) * canvas.width,
       y: ((e.clientY - rect.top) / rh) * canvas.height
