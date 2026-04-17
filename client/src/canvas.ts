@@ -34,14 +34,9 @@ function parseColor(hex: string) {
   return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255, a: 255 };
 }
 
-export function replay(
-  ctx: CanvasRenderingContext2D,
-  cmds: DrawCommand[],
-  scaleX: number,
-  scaleY: number
-) {
+export function replay(ctx: CanvasRenderingContext2D, cmds: DrawCommand[]) {
   ctx.save();
-  ctx.scale(scaleX, scaleY);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
   for (const cmd of cmds) applyCommand(ctx, cmd);

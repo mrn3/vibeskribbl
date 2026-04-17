@@ -31,10 +31,7 @@ export function App() {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = rect.width / CANVAS_W;
-    const scaleY = rect.height / CANVAS_H;
-    replay(ctx, cmdsRef.current, scaleX, scaleY);
+    replay(ctx, cmdsRef.current);
   }, []);
 
   const [tool, setTool] = useState<"pen" | "fill">("pen");
@@ -132,12 +129,15 @@ export function App() {
   const isHost = Boolean(self?.isHost);
   const isDrawer = Boolean(self?.isDrawer);
 
-  const clientToCanvas = (e: React.PointerEvent) => {
+  const clientToCanvas = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current!;
     const rect = canvas.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * CANVAS_W;
-    const y = ((e.clientY - rect.top) / rect.height) * CANVAS_H;
-    return { x, y };
+    const rw = rect.width || 1;
+    const rh = rect.height || 1;
+    return {
+      x: ((e.clientX - rect.left) / rw) * canvas.width,
+      y: ((e.clientY - rect.top) / rh) * canvas.height
+    };
   };
 
   const emitLine = (x0: number, y0: number, x1: number, y1: number) => {
@@ -403,7 +403,12 @@ export function App() {
             <div className="canvasWrap">
               <canvas
                 ref={canvasRef}
-                className="game"
+                className={
+                  "game" +
+                  (state.phase === "drawing" && isDrawer
+                    ? ` canvas--drawer${tool === "fill" ? " canvas--fill-tool" : ""}`
+                    : "")
+                }
                 width={CANVAS_W}
                 height={CANVAS_H}
                 onPointerDown={onPointerDown}
