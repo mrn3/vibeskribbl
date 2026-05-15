@@ -25,6 +25,7 @@ export function App() {
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const canvasWrapRef = useRef<HTMLDivElement | null>(null);
+  const chatLinesRef = useRef<HTMLDivElement | null>(null);
   const cmdsRef = useRef<DrawCommand[]>([]);
 
   const redraw = useCallback(() => {
@@ -110,6 +111,12 @@ export function App() {
   useEffect(() => {
     redraw();
   }, [redraw, state?.phase, state?.drawing]);
+
+  useEffect(() => {
+    const el = chatLinesRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [chat]);
 
   useEffect(() => {
     if (!state) return;
@@ -547,7 +554,7 @@ export function App() {
           <div className="panel">
             <h2>Chat / Guesses</h2>
             <div className="chat">
-              <div className="chatLines">
+              <div className="chatLines" ref={chatLinesRef}>
                 {chat.map((m) => (
                   <div key={m.key} className="chatLine" dangerouslySetInnerHTML={{ __html: m.html }} />
                 ))}
@@ -560,7 +567,7 @@ export function App() {
                     const text = String(fd.get("g") ?? "").trim();
                     if (!text) return;
                     if (state.phase === "lobby") socket.emit("room:lobbyMessage", text);
-                    else if (state.phase === "drawing" && !isDrawer && !self?.guessed) socket.emit("game:guess", text);
+                    else if (state.phase === "drawing" && !isDrawer) socket.emit("game:guess", text);
                     e.currentTarget.reset();
                   }}
                 >
@@ -572,13 +579,10 @@ export function App() {
                         ? "Lobby chat…"
                         : state.phase === "drawing" && !isDrawer
                           ? "Type your guess…"
-                          : "Chat is disabled here…"
+                          : "Chat…"
                     }
                     maxLength={100}
                     autoComplete="off"
-                    disabled={
-                      state.phase !== "lobby" && !(state.phase === "drawing" && !isDrawer && !self?.guessed)
-                    }
                   />
                 </form>
               </div>

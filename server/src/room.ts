@@ -93,6 +93,9 @@ export class Room {
   private scoreBaseline = new Map<string, number>();
   private drawerDisconnected = false;
 
+  /** Locked at the start of each turn so the drawer cannot shift if a non-drawer disconnects. */
+  private currentDrawerId: string | null = null;
+
   constructor(io: Server, code: string) {
     this.io = io;
     this.code = code;
@@ -162,6 +165,7 @@ export class Room {
       this.turnGuesserPoints = [];
       this.lastWord = null;
       this.lastTurnReason = "skipped";
+      this.currentDrawerId = null;
       this.phase = "turn_result";
       this.timeLeft = TURN_RESULT_SECONDS;
       this.startTick();
@@ -200,6 +204,7 @@ export class Room {
     this.guessed.clear();
     this.turnGuesserPoints = [];
     this.scoreBaseline.clear();
+    this.currentDrawerId = null;
     this.broadcastState();
   }
 
@@ -214,6 +219,12 @@ export class Room {
   }
 
   private drawerPlayer(): InternalPlayer | null {
+    if (this.currentDrawerId) {
+      for (const p of this.players.values()) {
+        if (p.id === this.currentDrawerId) return p;
+      }
+      return null;
+    }
     const list = this.playersList();
     if (!list.length) return null;
     return list[this.drawerIndex()] ?? null;
@@ -239,14 +250,18 @@ export class Room {
     const self = this.players.get(socketId);
     const listOrdered = this.playersList();
     const dIdx = this.drawerIndex();
-    const list = listOrdered.map((p, idx) => ({
+    const drawerId = this.drawerPlayer()?.id ?? null;
+    const list = listOrdered.map((p) => ({
       id: p.id,
       name: p.name,
       score: p.score,
       isHost: p.isHost,
       guessed: this.guessed.has(p.id),
       rank: 0,
-      isDrawer: this.started && idx === dIdx && (this.phase === "choosing" || this.phase === "drawing")
+      isDrawer:
+        this.started &&
+        drawerId === p.id &&
+        (this.phase === "choosing" || this.phase === "drawing")
     }));
 
     list.sort((a, b) => b.score - a.score);
@@ -339,6 +354,10 @@ export class Room {
     this.hintsRevealed = 0;
     this.hintSlots = [];
     this.captureScoreBaseline();
+
+    /** Lock the drawer for the duration of this turn so disconnects cannot shift the role. */
+    const drawerNow = this.playersList()[this.drawerIndex()] ?? null;
+    this.currentDrawerId = drawerNow ? drawerNow.id : null;
 
     this.phase = "choosing";
     this.wordOptions = pickWords(this.settings.wordChoices, {
