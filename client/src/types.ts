@@ -80,4 +80,5 @@ export type ChatEvent =
       kind: "correct";
       player: { id: string; name: string };
       points: number;
+      msSinceFirst: number;
     };

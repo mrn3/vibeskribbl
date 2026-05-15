@@ -87,8 +87,12 @@ export class Room {
 
   private guessed = new Set<string>();
   private turnGuesserPoints: number[] = [];
+  private firstGuessAt: number | null = null;
 
   private winners: { name: string; score: number }[] = [];
+
+  /** Secrets already used as the drawn word in the current game; reset between games. */
+  private usedWords = new Set<string>();
 
   private scoreBaseline = new Map<string, number>();
   private drawerDisconnected = false;
@@ -325,6 +329,7 @@ export class Room {
     this.started = true;
     this.turnCounter = 0;
     this.winners = [];
+    this.usedWords.clear();
     this.beginTurn();
   }
 
@@ -351,6 +356,7 @@ export class Room {
     this.drawing = [];
     this.guessed.clear();
     this.turnGuesserPoints = [];
+    this.firstGuessAt = null;
     this.hintsRevealed = 0;
     this.hintSlots = [];
     this.captureScoreBaseline();
@@ -360,10 +366,14 @@ export class Room {
     this.currentDrawerId = drawerNow ? drawerNow.id : null;
 
     this.phase = "choosing";
-    this.wordOptions = pickWords(this.settings.wordChoices, {
-      customWordsOnly: this.settings.customWordsOnly,
-      customWords: this.settings.customWords
-    });
+    this.wordOptions = pickWords(
+      this.settings.wordChoices,
+      {
+        customWordsOnly: this.settings.customWordsOnly,
+        customWords: this.settings.customWords
+      },
+      this.usedWords
+    );
     if (!this.wordOptions.length) {
       this.wordOptions = ["house", "cat", "tree"];
     }
@@ -381,6 +391,7 @@ export class Room {
     const word = this.wordOptions?.[safeIndex] ?? this.wordOptions?.[0];
     if (!word) return;
     this.secretWord = word;
+    this.usedWords.add(word.toLowerCase());
     this.wordHints = buildWordHints(word);
     this.prepareHintSchedule();
     this.phase = "drawing";
@@ -460,10 +471,15 @@ export class Room {
     this.guessed.add(p.id);
     this.turnGuesserPoints.push(pts);
 
+    const now = Date.now();
+    if (this.firstGuessAt === null) this.firstGuessAt = now;
+    const msSinceFirst = now - this.firstGuessAt;
+
     this.io.to(this.code).emit("room:chat", {
       kind: "correct",
       player: { id: p.id, name: p.name },
-      points: pts
+      points: pts,
+      msSinceFirst
     });
 
     if (this.guessed.size >= G) {
@@ -505,6 +521,7 @@ export class Room {
         const opts = this.wordOptions ?? ["house"];
         const w = opts[Math.floor(Math.random() * opts.length)] ?? "house";
         this.secretWord = w;
+        this.usedWords.add(w.toLowerCase());
         this.wordHints = buildWordHints(w);
         this.prepareHintSchedule();
         this.phase = "drawing";

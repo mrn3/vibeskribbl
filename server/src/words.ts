@@ -439,7 +439,8 @@ export function parseCustomWords(text: string) {
 
 export function pickWords(
   count: number,
-  settings: { customWordsOnly: boolean; customWords: string[] }
+  settings: { customWordsOnly: boolean; customWords: string[] },
+  exclude?: Set<string>
 ) {
   const pool = settings.customWordsOnly
     ? settings.customWords
@@ -450,10 +451,20 @@ export function pickWords(
   const uniq = Array.from(new Set(pool.map((w) => w.toLowerCase())));
   if (uniq.length === 0) return [];
 
+  const target = Math.min(count, uniq.length);
+  const fresh = exclude ? uniq.filter((w) => !exclude.has(w)) : uniq.slice();
+
   const out: string[] = [];
-  while (out.length < Math.min(count, uniq.length)) {
-    const w = uniq[Math.floor(Math.random() * uniq.length)];
-    if (!out.includes(w)) out.push(w);
+  while (out.length < Math.min(target, fresh.length)) {
+    const i = Math.floor(Math.random() * fresh.length);
+    out.push(fresh.splice(i, 1)[0]);
+  }
+  if (out.length < target) {
+    const fallback = uniq.filter((w) => !out.includes(w));
+    while (out.length < target && fallback.length) {
+      const i = Math.floor(Math.random() * fallback.length);
+      out.push(fallback.splice(i, 1)[0]);
+    }
   }
   return out;
 }

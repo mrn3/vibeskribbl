@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { io } from "socket.io-client";
 
-import type { ChatEvent, ClientState, DrawCommand } from "./types";
+import type { ChatEvent, ClientState, DrawCommand, PublicPlayer } from "./types";
 import { CANVAS_H, CANVAS_W, PALETTE, replay } from "./canvas";
 
 function fmtReason(r: ClientState["lastTurnReason"]) {
@@ -86,12 +86,16 @@ export function App() {
           ].slice(-200)
         );
       } else {
+        const delta =
+          evt.msSinceFirst > 0
+            ? ` <span style="color:var(--muted)">(+${evt.msSinceFirst}ms)</span>`
+            : "";
         setChat((c) =>
           [
             ...c,
             {
               key,
-              html: `<span class="good">${escapeHtml(evt.player.name)} guessed the word!</span>`
+              html: `<span class="good">${escapeHtml(evt.player.name)} guessed the word!</span>${delta}`
             }
           ].slice(-200)
         );
@@ -473,11 +477,11 @@ export function App() {
                 </div>
               ) : null}
 
-              {state.phase === "turn_result" || state.phase === "game_over" ? (
+              {state.phase === "turn_result" ? (
                 <div className="overlay">
                   <div className="card">
                     <div style={{ fontWeight: 950, fontSize: 16, marginBottom: 6 }}>
-                      {state.phase === "game_over" ? "Match results" : "Round result"}
+                      Round result
                     </div>
                     <div className="note" style={{ marginBottom: 10 }}>
                       {fmtReason(state.lastTurnReason)}
@@ -489,22 +493,13 @@ export function App() {
                     ) : (
                       <div className="note">No word this turn.</div>
                     )}
-                    {state.phase === "game_over" ? (
-                      <div style={{ marginTop: 12 }}>
-                        <div className="note" style={{ marginBottom: 8 }}>
-                          Winner(s)
-                        </div>
-                        <div style={{ display: "grid", gap: 8 }}>
-                          {(state.winners ?? []).map((w) => (
-                            <div key={w.name} className="player">
-                              <div className="name">{w.name}</div>
-                              <div className="score">{w.score}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
                   </div>
+                </div>
+              ) : null}
+
+              {state.phase === "game_over" ? (
+                <div className="overlay overlay--podium">
+                  <Podium players={state.players} secretWord={state.secretWord} />
                 </div>
               ) : null}
             </div>
