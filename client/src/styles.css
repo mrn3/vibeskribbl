@@ -466,3 +466,219 @@ canvas.game.canvas--drawer.canvas--fill-tool {
   font-size: 12px;
   line-height: 1.45;
 }
+
+
+.overlay--podium {
+  background: radial-gradient(900px 600px at 50% 30%, rgba(124, 92, 255, 0.18) 0%, rgba(6, 10, 20, 0.92) 60%, rgba(6, 10, 20, 0.96) 100%);
+  overflow: hidden;
+  align-items: stretch;
+  padding: 0;
+}
+
+.podium {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  align-items: end;
+  padding: 14px 18px 0;
+  overflow: hidden;
+}
+
+.podium__title {
+  text-align: center;
+  font-weight: 900;
+  font-size: 20px;
+  letter-spacing: 0.5px;
+  color: #ffd24a;
+  text-shadow: 0 0 12px rgba(255, 210, 74, 0.45), 0 2px 0 rgba(0, 0, 0, 0.35);
+  animation: podiumTitleIn 600ms ease-out both;
+}
+
+.podium__subtitle {
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 4px;
+  animation: podiumTitleIn 600ms ease-out 120ms both;
+}
+
+.podium__subtitle span {
+  font-family: var(--mono);
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 800;
+  margin-left: 4px;
+}
+
+.podium__stage {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  align-items: end;
+  gap: 14px;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding-bottom: 0;
+  position: relative;
+  z-index: 2;
+}
+
+.podium__slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.podium__player {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 6px;
+  max-width: 100%;
+  opacity: 0;
+  transform: translateY(14px);
+  animation: podiumPlayerIn 500ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+.podium__medal {
+  font-size: 34px;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.45));
+  animation: medalPop 600ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+.podium__name {
+  font-weight: 900;
+  font-size: 14px;
+  max-width: 160px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+}
+
+.podium__score {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.podium__block {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-bottom: none;
+  border-radius: 14px 14px 0 0;
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12px;
+  height: 0;
+  animation: podiumRise 700ms cubic-bezier(0.2, 0.9, 0.25, 1) forwards;
+  box-shadow: inset 0 -40px 80px rgba(0, 0, 0, 0.35), 0 -8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.podium__block--empty {
+  opacity: 0.35;
+}
+
+.podium__rank {
+  font-family: var(--mono);
+  font-weight: 900;
+  font-size: 28px;
+  color: rgba(0, 0, 0, 0.45);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.podium__slot--gold .podium__block {
+  background: linear-gradient(180deg, #ffe27a 0%, #ffc83a 45%, #b88a00 100%);
+  --podium-target-h: 168px;
+  animation-delay: 1.6s;
+  box-shadow: inset 0 -40px 80px rgba(0, 0, 0, 0.35), 0 0 32px rgba(255, 200, 58, 0.45);
+}
+.podium__slot--silver .podium__block {
+  background: linear-gradient(180deg, #f1f4f8 0%, #c7cfd9 45%, #8a93a3 100%);
+  --podium-target-h: 124px;
+  animation-delay: 0.8s;
+}
+.podium__slot--bronze .podium__block {
+  background: linear-gradient(180deg, #e9b18a 0%, #d49364 45%, #8a4f2a 100%);
+  --podium-target-h: 92px;
+  animation-delay: 0.2s;
+}
+
+.podium__slot--gold .podium__player { animation-delay: 2.3s; }
+.podium__slot--silver .podium__player { animation-delay: 1.5s; }
+.podium__slot--bronze .podium__player { animation-delay: 0.9s; }
+
+.podium__slot--gold .podium__medal { animation-delay: 2.4s; }
+.podium__slot--silver .podium__medal { animation-delay: 1.6s; }
+.podium__slot--bronze .podium__medal { animation-delay: 1s; }
+
+.podium__confetti {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 1;
+}
+
+.confetti {
+  position: absolute;
+  top: -16px;
+  width: 8px;
+  height: 14px;
+  border-radius: 2px;
+  opacity: 0.9;
+  animation-name: confettiFall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@keyframes podiumTitleIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes podiumRise {
+  from { height: 0; }
+  to   { height: var(--podium-target-h, 100px); }
+}
+
+@keyframes podiumPlayerIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes medalPop {
+  0%   { opacity: 0; transform: scale(0.2) rotate(-25deg); }
+  60%  { opacity: 1; transform: scale(1.2) rotate(8deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+
+@keyframes confettiFall {
+  0%   { transform: translateY(-20px) rotate(0deg); opacity: 0; }
+  10%  { opacity: 1; }
+  100% { transform: translateY(110vh) rotate(720deg); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .podium__title,
+  .podium__subtitle,
+  .podium__player,
+  .podium__medal,
+  .podium__block {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .podium__slot--gold .podium__block { height: 168px; }
+  .podium__slot--silver .podium__block { height: 124px; }
+  .podium__slot--bronze .podium__block { height: 92px; }
+  .confetti { display: none; }
+}
+

@@ -597,3 +597,79 @@ function escapeHtml(s: string) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
 }
+
+type PodiumSlot = {
+  rank: 1 | 2 | 3;
+  medal: string;
+  variant: "gold" | "silver" | "bronze";
+  player: PublicPlayer | undefined;
+};
+
+function Podium({ players, secretWord }: { players: PublicPlayer[]; secretWord: string | null }) {
+  const top3 = [...players].sort((a, b) => b.score - a.score).slice(0, 3);
+  const slots: PodiumSlot[] = [
+    { rank: 2, medal: "🥈", variant: "silver", player: top3[1] },
+    { rank: 1, medal: "🥇", variant: "gold", player: top3[0] },
+    { rank: 3, medal: "🥉", variant: "bronze", player: top3[2] }
+  ];
+  const confetti = useMemo(
+    () =>
+      Array.from({ length: 80 }, (_, i) => ({
+        left: Math.random() * 100,
+        delay: Math.random() * 2.5,
+        duration: 3 + Math.random() * 2.5,
+        color: ["#ffd24a", "#d6dde6", "#d49364", "#7c5cff", "#31d0ff", "#3ee08f", "#ff5c7a"][i % 7],
+        rot: Math.random() * 360
+      })),
+    []
+  );
+
+  return (
+    <div className="podium">
+      <div className="podium__title">🏅 Final Standings 🏅</div>
+      {secretWord ? (
+        <div className="podium__subtitle">Last word: <span>{secretWord}</span></div>
+      ) : null}
+
+      <div className="podium__stage">
+        {slots.map((s) => (
+          <div key={s.rank} className={`podium__slot podium__slot--${s.variant}`}>
+            {s.player ? (
+              <>
+                <div className="podium__player">
+                  <div className="podium__medal" aria-hidden>{s.medal}</div>
+                  <div className="podium__name" title={s.player.name}>{s.player.name}</div>
+                  <div className="podium__score">{s.player.score} pts</div>
+                </div>
+                <div className="podium__block">
+                  <div className="podium__rank">{s.rank}</div>
+                </div>
+              </>
+            ) : (
+              <div className="podium__block podium__block--empty">
+                <div className="podium__rank">{s.rank}</div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="podium__confetti" aria-hidden>
+        {confetti.map((c, i) => (
+          <span
+            key={i}
+            className="confetti"
+            style={{
+              left: `${c.left}%`,
+              background: c.color,
+              animationDelay: `${c.delay}s`,
+              animationDuration: `${c.duration}s`,
+              transform: `rotate(${c.rot}deg)`
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
