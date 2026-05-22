@@ -11,6 +11,14 @@ function fmtReason(r: ClientState["lastTurnReason"]) {
   return "";
 }
 
+/** Deterministic per-player color derived from a stable seed (player id). */
+function colorForName(seed: string) {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  const hue = h % 360;
+  return `hsl(${hue} 70% 70%)`;
+}
+
 export function App() {
   const socket = useMemo(() => io({ path: "/socket.io" }), []);
 
@@ -23,7 +31,9 @@ export function App() {
   const [copied, setCopied] = useState(false);
 
   const [state, setState] = useState<ClientState | null>(null);
-  const [chat, setChat] = useState<{ key: string; html: string }[]>([]);
+  const [chat, setChat] = useState<{ key: string; html: string; cls?: string }[]>([]);
+  const prevPhaseRef = useRef<ClientState["phase"] | null>(null);
+  const stateRef = useRef<ClientState | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const canvasWrapRef = useRef<HTMLDivElement | null>(null);
@@ -74,6 +84,7 @@ export function App() {
   useEffect(() => {
     const onState = (s: ClientState) => {
       setState(s);
+      stateRef.current = s;
       cmdsRef.current = s.drawing ?? [];
       redraw();
     };
@@ -83,11 +94,21 @@ export function App() {
     };
     const onChat = (evt: ChatEvent) => {
       const key = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+      const nameColor = colorForName(evt.player.id);
+      const whoHtml = `<span class="who" style="color:${nameColor}">${escapeHtml(evt.player.name)}</span>`;
       if (evt.kind === "message") {
+        const cur = stateRef.current;
+        const drawerId = cur ? cur.players[cur.drawerIndex]?.id : null;
+        const isWrongGuess =
+          cur?.phase === "drawing" && drawerId !== evt.player.id;
         setChat((c) =>
           [
             ...c,
-            { key, html: `<span class="who">${escapeHtml(evt.player.name)}:</span>${escapeHtml(evt.text)}` }
+            {
+              key,
+              cls: isWrongGuess ? "bad" : undefined,
+              html: `${whoHtml}<span class="who-sep">:</span> ${escapeHtml(evt.text)}`
+            }
           ].slice(-200)
         );
       } else {
@@ -100,7 +121,8 @@ export function App() {
             ...c,
             {
               key,
-              html: `<span class="good">${escapeHtml(evt.player.name)} guessed the word!</span>${delta}`
+              cls: "good",
+              html: `${whoHtml} guessed the word!${delta}`
             }
           ].slice(-200)
         );
@@ -120,6 +142,27 @@ export function App() {
   useEffect(() => {
     redraw();
   }, [redraw, state?.phase, state?.drawing]);
+
+  useEffect(() => {
+    const prev = prevPhaseRef.current;
+    const curr = state?.phase ?? null;
+    prevPhaseRef.current = curr;
+    if (!state) return;
+    const drawEnded =
+      (prev === "drawing" || prev === "choosing") &&
+      (curr === "turn_result" || curr === "game_over");
+    if (!drawEnded) return;
+    const drawerName = state.players[state.drawerIndex]?.name ?? "Drawer";
+    const word = state.secretWord ?? state.lastWord ?? "";
+    const reason = fmtReason(state.lastTurnReason);
+    const parts = [`Round ${state.currentRound} / ${state.totalRounds}`];
+    if (word) parts.push(`${escapeHtml(drawerName)} drew <b>${escapeHtml(word)}</b>`);
+    else parts.push(`${escapeHtml(drawerName)}'s turn ended`);
+    if (reason) parts.push(escapeHtml(reason));
+    const html = `<span>${parts.join(" · ")}</span>`;
+    const key = `sep_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    setChat((c) => [...c, { key, html, cls: "separator" }].slice(-200));
+  }, [state?.phase]);
 
   useEffect(() => {
     const el = chatLinesRef.current;
@@ -286,7 +329,7 @@ export function App() {
                 <div key={p.id} className="player">
                   <div className="left">
                     <div className="name">
-                      {p.name}
+                      <span style={{ color: colorForName(p.id) }}>{p.name}</span>
                       {p.id === state.selfId ? " (you)" : ""}
                     </div>
                     <div className="badges">
@@ -598,7 +641,11 @@ export function App() {
             <div className="chat">
               <div className="chatLines" ref={chatLinesRef}>
                 {chat.map((m) => (
-                  <div key={m.key} className="chatLine" dangerouslySetInnerHTML={{ __html: m.html }} />
+                  <div
+                    key={m.key}
+                    className={`chatLine${m.cls ? ` ${m.cls}` : ""}`}
+                    dangerouslySetInnerHTML={{ __html: m.html }}
+                  />
                 ))}
               </div>
               <div style={{ borderTop: "1px solid var(--border)", padding: 10 }}>
