@@ -38,7 +38,7 @@ function buildWordHints(secret: string): WordHint[] {
 
 function defaultSettings(): RoomSettings {
   return {
-    drawTime: 80,
+    drawTime: 60,
     rounds: 3,
     maxPlayers: 12,
     wordChoices: 3,
