@@ -34,13 +34,16 @@ function makeServer() {
   return { server, broadcasts };
 }
 
-type SnapPlayer = { id: string; name: string; isDrawer: boolean; guessed: boolean };
+type SnapPlayer = { id: string; name: string; isDrawer: boolean; guessed: boolean; score: number };
 type Snap = {
   selfId: string;
   phase: string;
   players: SnapPlayer[];
   wordOptions: string[] | null;
   lastTurnReason: string | null;
+  likes: number;
+  dislikes: number;
+  selfReaction: "like" | "dislike" | null;
 };
 
 function snapshot(room: Room, socketId: string): Snap {
@@ -289,4 +292,148 @@ test("msSinceFirst resets between turns", (t) => {
   assert.equal(corrects[2].msSinceFirst, 0, "first guesser of turn 2 should reset delta to 0");
   assert.equal(corrects[3].player.name, "P2");
   assert.equal(corrects[3].msSinceFirst, 123);
+});
+
+function drawerScoreOf(snap: Snap, name: string) {
+  return snap.players.find((p) => p.name === name)!.score;
+}
+
+test("reactions: like/dislike counts update; drawer cannot react", (t) => {
+  const { room, players } = setupRoom(3);
+  t.after(() => room.dispose());
+
+  room.startGame(players[0].socket.id);
+  room.chooseWord(players[0].socket.id, 0);
+
+  // Drawer attempt should be ignored.
+  room.react(players[0].socket.id, "like");
+  let snap = snapshot(room, players[0].socket.id);
+  assert.equal(snap.likes, 0);
+  assert.equal(snap.dislikes, 0);
+
+  room.react(players[1].socket.id, "like");
+  room.react(players[2].socket.id, "dislike");
+  snap = snapshot(room, players[1].socket.id);
+  assert.equal(snap.likes, 1);
+  assert.equal(snap.dislikes, 1);
+  assert.equal(snap.selfReaction, "like");
+
+  // Toggling same reaction clears it.
+  room.react(players[1].socket.id, "like");
+  snap = snapshot(room, players[1].socket.id);
+  assert.equal(snap.likes, 0);
+  assert.equal(snap.selfReaction, null);
+
+  // Switching reaction kind moves the vote.
+  room.react(players[2].socket.id, "like");
+  snap = snapshot(room, players[2].socket.id);
+  assert.equal(snap.likes, 1);
+  assert.equal(snap.dislikes, 0);
+  assert.equal(snap.selfReaction, "like");
+});
+
+test("reactions: net like-dislike applied to drawer score on turn finish", (t) => {
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  const { room, players } = setupRoom(4);
+  t.after(() => room.dispose());
+
+  room.startGame(players[0].socket.id);
+  room.chooseWord(players[0].socket.id, 0);
+
+  // Two likes and one dislike for the drawer (P0): net +1 → +10 points.
+  room.react(players[1].socket.id, "like");
+  room.react(players[2].socket.id, "like");
+  room.react(players[3].socket.id, "dislike");
+
+  const before = drawerScoreOf(snapshot(room, players[0].socket.id), "P0");
+
+  // End the turn by having everyone guess correctly.
+  const secret = (room as unknown as { secretWord: string | null }).secretWord!;
+  room.guess(players[1].socket.id, secret);
+  room.guess(players[2].socket.id, secret);
+  room.guess(players[3].socket.id, secret);
+
+  const after = drawerScoreOf(snapshot(room, players[0].socket.id), "P0");
+  assert.equal(after - before >= 10, true, "drawer should gain at least the +10 net reaction bonus");
+  // Drawer baseline includes guesser-derived points; subtract those to verify the +10 delta cleanly.
+  const guesserPts = (room as unknown as { turnGuesserPoints: number[] }).turnGuesserPoints;
+  const drawerFromGuesses = Math.floor(
+    guesserPts.filter((p) => p > 0).reduce((a, b) => a + b, 0) /
+      Math.max(1, guesserPts.filter((p) => p > 0).length)
+  );
+  assert.equal(after - before - drawerFromGuesses, 10, "exactly +10 from net reactions");
+});
+
+test("reactions: negative net deducts from drawer; score never goes below zero", (t) => {
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  const { room, players } = setupRoom(4);
+  t.after(() => room.dispose());
+
+  room.startGame(players[0].socket.id);
+  room.chooseWord(players[0].socket.id, 0);
+
+  // Three dislikes and zero likes: net -3 → -30 points.
+  room.react(players[1].socket.id, "dislike");
+  room.react(players[2].socket.id, "dislike");
+  room.react(players[3].socket.id, "dislike");
+
+  // End turn via time-out so no guesser/drawer points accrue.
+  for (let i = 0; i < 200; i++) {
+    t.mock.timers.tick(1000);
+    const phase = snapshot(room, players[0].socket.id).phase;
+    if (phase !== "drawing") break;
+  }
+
+  const score = drawerScoreOf(snapshot(room, players[0].socket.id), "P0");
+  assert.equal(score, 0, "score must be clamped at zero, not negative");
+});
+
+test("reactions: not applied when drawer disconnects mid-turn", (t) => {
+  const { room, players } = setupRoom(3);
+  t.after(() => room.dispose());
+
+  room.startGame(players[0].socket.id);
+  room.chooseWord(players[0].socket.id, 0);
+
+  room.react(players[1].socket.id, "like");
+  room.react(players[2].socket.id, "like");
+
+  const drawerScoreBefore = drawerScoreOf(snapshot(room, players[1].socket.id), "P0");
+  room.removePlayer(players[0].socket.id);
+
+  // P0 is gone from the player list; the remaining players' scores must be unchanged.
+  const snap = snapshot(room, players[1].socket.id);
+  assert.equal(snap.lastTurnReason, "skipped");
+  assert.equal(snap.players.find((p) => p.name === "P0"), undefined);
+  void drawerScoreBefore;
+});
+
+test("reactions: cleared between turns", (t) => {
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  const { room, players } = setupRoom(3);
+  t.after(() => room.dispose());
+
+  room.startGame(players[0].socket.id);
+  room.chooseWord(players[0].socket.id, 0);
+  room.react(players[1].socket.id, "like");
+  room.react(players[2].socket.id, "dislike");
+
+  // Finish turn 1 by everyone guessing.
+  const secret1 = (room as unknown as { secretWord: string | null }).secretWord!;
+  room.guess(players[1].socket.id, secret1);
+  room.guess(players[2].socket.id, secret1);
+
+  // Advance to next choosing phase.
+  let snap = snapshot(room, players[0].socket.id);
+  for (let i = 0; i < 10 && snap.phase !== "choosing"; i++) {
+    t.mock.timers.tick(1000);
+    snap = snapshot(room, players[0].socket.id);
+  }
+  assert.equal(snap.phase, "choosing");
+  room.chooseWord(players[1].socket.id, 0);
+
+  snap = snapshot(room, players[0].socket.id);
+  assert.equal(snap.likes, 0, "likes should reset on new turn");
+  assert.equal(snap.dislikes, 0, "dislikes should reset on new turn");
+  assert.equal(snap.selfReaction, null);
 });

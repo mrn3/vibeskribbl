@@ -6,7 +6,7 @@ import fs from "node:fs";
 import express from "express";
 import { Server } from "socket.io";
 
-import type { DrawCommand } from "./types.js";
+import type { DrawCommand, ReactionKind } from "./types.js";
 import { Room, rooms } from "./room.js";
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
@@ -124,6 +124,14 @@ io.on("connection", (socket) => {
   socket.on("game:guess", (text: string) => {
     if (!attached) return;
     attached.guess(socket.id, String(text ?? ""));
+  });
+
+  socket.on("game:react", (payload: { kind: ReactionKind | null } | ReactionKind | null) => {
+    if (!attached) return;
+    const kind =
+      payload && typeof payload === "object" ? payload.kind : (payload as ReactionKind | null);
+    if (kind !== "like" && kind !== "dislike" && kind !== null) return;
+    attached.react(socket.id, kind);
   });
 
   socket.on("room:lobbyMessage", (text: string) => {

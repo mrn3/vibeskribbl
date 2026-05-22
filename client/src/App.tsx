@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { io } from "socket.io-client";
 
-import type { ChatEvent, ClientState, DrawCommand, PublicPlayer } from "./types";
+import type { ChatEvent, ClientState, DrawCommand, PublicPlayer, ReactionKind } from "./types";
 import { CANVAS_H, CANVAS_W, PALETTE, replay } from "./canvas";
 
 function fmtReason(r: ClientState["lastTurnReason"]) {
@@ -593,6 +593,38 @@ export function App() {
                 </div>
               ) : null}
             </div>
+
+            {(state.phase === "drawing" || state.phase === "turn_result") &&
+            (state.likes > 0 || state.dislikes > 0 || (state.phase === "drawing" && !isDrawer)) ? (
+              <div className="reactions">
+                <button
+                  type="button"
+                  className={`reactionBtn like${state.selfReaction === "like" ? " active" : ""}`}
+                  disabled={state.phase !== "drawing" || isDrawer}
+                  title={isDrawer ? "You are drawing" : "Like this drawing (+10 to drawer)"}
+                  onClick={() => {
+                    const next: ReactionKind | null = state.selfReaction === "like" ? null : "like";
+                    socket.emit("game:react", { kind: next });
+                  }}
+                >
+                  <span className="reactionIcon" aria-hidden>👍</span>
+                  <span className="reactionCount">{state.likes}</span>
+                </button>
+                <button
+                  type="button"
+                  className={`reactionBtn dislike${state.selfReaction === "dislike" ? " active" : ""}`}
+                  disabled={state.phase !== "drawing" || isDrawer}
+                  title={isDrawer ? "You are drawing" : "Dislike this drawing (−10 to drawer)"}
+                  onClick={() => {
+                    const next: ReactionKind | null = state.selfReaction === "dislike" ? null : "dislike";
+                    socket.emit("game:react", { kind: next });
+                  }}
+                >
+                  <span className="reactionIcon" aria-hidden>👎</span>
+                  <span className="reactionCount">{state.dislikes}</span>
+                </button>
+              </div>
+            ) : null}
 
             {state.phase === "drawing" && isDrawer ? (
               <div className="toolbar">

@@ -31,6 +31,8 @@ export type ClearCmd = { type: "clear" };
 
 export type DrawCommand = LineCmd | FillCmd | ClearCmd;
 
+export type ReactionKind = "like" | "dislike";
+
 export type PublicPlayer = {
   id: string;
   name: string;
@@ -73,4 +75,9 @@ export type ClientState = {
   drawing: DrawCommand[];
   /** Winner names for simple podium */
   winners: { name: string; score: number }[];
+  /** Like/dislike counts for the current (or last) drawing */
+  likes: number;
+  dislikes: number;
+  /** Current viewer's reaction for this turn, if any */
+  selfReaction: ReactionKind | null;
 };

@@ -1,5 +1,5 @@
 import type { Server, Socket } from "socket.io";
-import type { DrawCommand, GamePhase, RoomSettings, WordHint } from "./types.js";
+import type { DrawCommand, GamePhase, ReactionKind, RoomSettings, WordHint } from "./types.js";
 import { drawerScoreFromGuesserPoints, guesserScore } from "./scoring.js";
 import { parseCustomWords, pickWords } from "./words.js";
 
@@ -13,6 +13,7 @@ type InternalPlayer = {
 
 const CHOICE_SECONDS = 15;
 const TURN_RESULT_SECONDS = 5;
+const REACTION_POINTS = 10;
 
 function randomId() {
   return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
@@ -88,6 +89,9 @@ export class Room {
   private guessed = new Set<string>();
   private turnGuesserPoints: number[] = [];
   private firstGuessAt: number | null = null;
+
+  /** Per-turn reactions: playerId -> kind. Reset each turn. */
+  private reactions = new Map<string, ReactionKind>();
 
   private winners: { name: string; score: number }[] = [];
 
@@ -177,6 +181,7 @@ export class Room {
 
     this.players.delete(socketId);
     this.sockets.delete(socketId);
+    this.reactions.delete(p.id);
 
     if (wasHost) {
       const next = this.players.values().next().value as InternalPlayer | undefined;
@@ -208,6 +213,7 @@ export class Room {
     this.guessed.clear();
     this.turnGuesserPoints = [];
     this.scoreBaseline.clear();
+    this.reactions.clear();
     this.currentDrawerId = null;
     this.broadcastState();
   }
@@ -277,6 +283,8 @@ export class Room {
 
     const d = this.drawerPlayer();
     const isDrawer = !!self && d?.id === self.id;
+    const { likes, dislikes } = this.reactionCounts();
+    const selfReaction = self ? (this.reactions.get(self.id) ?? null) : null;
 
     return {
       selfId: self?.id ?? "",
@@ -300,8 +308,36 @@ export class Room {
       drawing: this.drawing,
       winners: this.winners,
       secretWord:
-        this.phase === "turn_result" || this.phase === "game_over" ? this.lastWord : null
+        this.phase === "turn_result" || this.phase === "game_over" ? this.lastWord : null,
+      likes,
+      dislikes,
+      selfReaction
     };
+  }
+
+  private reactionCounts() {
+    let likes = 0;
+    let dislikes = 0;
+    for (const r of this.reactions.values()) {
+      if (r === "like") likes++;
+      else if (r === "dislike") dislikes++;
+    }
+    return { likes, dislikes };
+  }
+
+  react(socketId: string, kind: ReactionKind | null) {
+    const p = this.players.get(socketId);
+    if (!p) return;
+    if (this.phase !== "drawing") return;
+    const d = this.drawerPlayer();
+    if (!d || p.id === d.id) return;
+    if (kind === null) this.reactions.delete(p.id);
+    else if (kind === "like" || kind === "dislike") {
+      const current = this.reactions.get(p.id);
+      if (current === kind) this.reactions.delete(p.id);
+      else this.reactions.set(p.id, kind);
+    }
+    this.broadcastState();
   }
 
   updateSettings(socketId: string, next: Partial<RoomSettings> & { customWordsText?: string }) {
@@ -359,6 +395,7 @@ export class Room {
     this.firstGuessAt = null;
     this.hintsRevealed = 0;
     this.hintSlots = [];
+    this.reactions.clear();
     this.captureScoreBaseline();
 
     /** Lock the drawer for the duration of this turn so disconnects cannot shift the role. */
@@ -578,6 +615,9 @@ export class Room {
     if (!this.drawerDisconnected && d && this.secretWord) {
       const drawerPts = drawerScoreFromGuesserPoints(this.turnGuesserPoints);
       if (drawerPts > 0) d.score += drawerPts;
+      const { likes, dislikes } = this.reactionCounts();
+      const reactionDelta = (likes - dislikes) * REACTION_POINTS;
+      if (reactionDelta !== 0) d.score = Math.max(0, d.score + reactionDelta);
     }
 
     this.secretWord = null;

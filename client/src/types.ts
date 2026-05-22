@@ -31,6 +31,8 @@ export type ClearCmd = { type: "clear" };
 
 export type DrawCommand = LineCmd | FillCmd | ClearCmd;
 
+export type ReactionKind = "like" | "dislike";
+
 export type PublicPlayer = {
   id: string;
   name: string;
@@ -68,6 +70,9 @@ export type ClientState = {
   drawing: DrawCommand[];
   winners: { name: string; score: number }[];
   secretWord: string | null;
+  likes: number;
+  dislikes: number;
+  selfReaction: ReactionKind | null;
 };
 
 export type ChatEvent =

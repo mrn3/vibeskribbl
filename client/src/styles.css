@@ -288,6 +288,56 @@ canvas.game.canvas--drawer.canvas--fill-tool {
   flex-wrap: wrap;
 }
 
+.reactions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.reactionBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.reactionBtn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.reactionBtn .reactionIcon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.reactionBtn .reactionCount {
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.reactionBtn.like.active {
+  border-color: rgba(62, 224, 143, 0.65);
+  background: rgba(62, 224, 143, 0.18);
+  color: rgba(62, 224, 143, 0.95);
+}
+
+.reactionBtn.dislike.active {
+  border-color: rgba(255, 92, 122, 0.65);
+  background: rgba(255, 92, 122, 0.18);
+  color: rgba(255, 92, 122, 0.95);
+}
+
 .swatch {
   width: 22px;
   height: 22px;
