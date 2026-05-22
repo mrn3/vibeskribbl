@@ -19,6 +19,8 @@ export function App() {
 
   const [name, setName] = useState(() => localStorage.getItem("vs_name") ?? "");
   const [roomCode, setRoomCode] = useState(() => localStorage.getItem("vs_room") ?? "");
+  const [joinFromUrl, setJoinFromUrl] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const [state, setState] = useState<ClientState | null>(null);
   const [chat, setChat] = useState<{ key: string; html: string }[]>([]);
@@ -63,7 +65,10 @@ export function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const room = params.get("room");
-    if (room) setRoomCode(room.trim().toUpperCase());
+    if (room) {
+      setRoomCode(room.trim().toUpperCase());
+      setJoinFromUrl(true);
+    }
   }, []);
 
   useEffect(() => {
@@ -249,10 +254,19 @@ export function App() {
               />
             </div>
             <div className="row">
-              <button className="btn" type="button" onClick={() => join(true)}>
+              <button
+                className={`btn ${joinFromUrl ? "secondary" : ""}`}
+                type="button"
+                onClick={() => join(true)}
+              >
                 Create private room
               </button>
-              <button className="btn secondary" type="button" onClick={() => join(false)} disabled={!roomCode.trim()}>
+              <button
+                className={`btn ${joinFromUrl ? "" : "secondary"}`}
+                type="button"
+                onClick={() => join(false)}
+                disabled={!roomCode.trim()}
+              >
                 Join room
               </button>
             </div>
@@ -397,10 +411,43 @@ export function App() {
                 )}
                 <div style={{ height: 10 }} />
                 <div className="note">
-                  Invite link:{" "}
-                  <span style={{ fontFamily: "var(--mono)", color: "rgba(255,255,255,0.85)" }}>
-                    {`${window.location.origin}?room=${encodeURIComponent(state.roomCode)}`}
-                  </span>
+                  <div style={{ marginBottom: 6 }}>Invite link:</div>
+                  <div className="row" style={{ alignItems: "center", gap: 8 }}>
+                    <span
+                      style={{
+                        fontFamily: "var(--mono)",
+                        color: "rgba(255,255,255,0.85)",
+                        overflowWrap: "anywhere"
+                      }}
+                    >
+                      {`${window.location.origin}?room=${encodeURIComponent(state.roomCode)}`}
+                    </span>
+                    <button
+                      className="btn secondary"
+                      type="button"
+                      onClick={async () => {
+                        const url = `${window.location.origin}?room=${encodeURIComponent(state.roomCode)}`;
+                        try {
+                          await navigator.clipboard.writeText(url);
+                        } catch {
+                          const ta = document.createElement("textarea");
+                          ta.value = url;
+                          document.body.appendChild(ta);
+                          ta.select();
+                          try {
+                            document.execCommand("copy");
+                          } catch {
+                            // ignore
+                          }
+                          document.body.removeChild(ta);
+                        }
+                        setCopied(true);
+                        window.setTimeout(() => setCopied(false), 1500);
+                      }}
+                    >
+                      {copied ? "Copied!" : "Copy"}
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : null}
