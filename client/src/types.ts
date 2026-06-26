@@ -73,6 +73,8 @@ export type ClientState = {
   likes: number;
   dislikes: number;
   selfReaction: ReactionKind | null;
+  paused: boolean;
+  disconnectedDrawerName: string | null;
 };
 
 export type ChatEvent =

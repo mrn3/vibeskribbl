@@ -80,4 +80,8 @@ export type ClientState = {
   dislikes: number;
   /** Current viewer's reaction for this turn, if any */
   selfReaction: ReactionKind | null;
+  /** True while the turn is frozen waiting for a disconnected drawer to return */
+  paused: boolean;
+  /** Name of the drawer being waited on while paused */
+  disconnectedDrawerName: string | null;
 };

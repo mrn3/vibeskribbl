@@ -44,6 +44,8 @@ type Snap = {
   likes: number;
   dislikes: number;
   selfReaction: "like" | "dislike" | null;
+  paused: boolean;
+  disconnectedDrawerName: string | null;
 };
 
 function snapshot(room: Room, socketId: string): Snap {
@@ -406,6 +408,111 @@ test("reactions: not applied when drawer disconnects mid-turn", (t) => {
   assert.equal(snap.lastTurnReason, "skipped");
   assert.equal(snap.players.find((p) => p.name === "P0"), undefined);
   void drawerScoreBefore;
+});
+
+test("reconnect with token restores a disconnected player's slot and score", (t) => {
+  const { server } = makeServer();
+  const room = new Room(server, "RC0001");
+  t.after(() => room.dispose());
+
+  const a = makeSocket("a0");
+  const b = makeSocket("b0");
+  const c = makeSocket("c0");
+  room.addPlayer(a.socket, "Alice", true);
+  const tokenB = room.addPlayer(b.socket, "Bob", false);
+  room.addPlayer(c.socket, "Cara", false);
+
+  room.startGame(a.socket.id);
+  room.chooseWord(a.socket.id, 0);
+  const secret = (room as unknown as { secretWord: string | null }).secretWord!;
+  room.guess(b.socket.id, secret);
+  const earned = snapshot(room, b.socket.id).players.find((p) => p.name === "Bob")!.score;
+  assert.ok(earned > 0, "Bob should have earned points");
+
+  // Bob (a non-drawer) drops; his slot is hidden but the turn keeps going.
+  room.handleDisconnect(b.socket.id);
+  let snap = snapshot(room, a.socket.id);
+  assert.equal(snap.paused, false, "a non-drawer drop must not pause the turn");
+  assert.equal(snap.phase, "drawing");
+  assert.equal(snap.players.find((p) => p.name === "Bob"), undefined, "disconnected player hidden");
+
+  // Bob reconnects on a fresh socket using his token.
+  const b2 = makeSocket("b1");
+  const re = room.tryReconnect(b2.socket, tokenB, "Bob");
+  assert.equal(re, tokenB, "reconnect should succeed and echo the token");
+
+  snap = snapshot(room, b2.socket.id);
+  const bob = snap.players.find((p) => p.name === "Bob");
+  assert.ok(bob, "Bob should be back in the player list");
+  assert.equal(bob!.score, earned, "score must be preserved across reconnect");
+  assert.equal(bob!.guessed, true, "already-guessed state must be preserved");
+});
+
+test("drawer disconnect pauses the turn; reconnect resumes it", (t) => {
+  const { server } = makeServer();
+  const room = new Room(server, "RC0002");
+  t.after(() => room.dispose());
+
+  const a = makeSocket("a0");
+  const b = makeSocket("b0");
+  const c = makeSocket("c0");
+  const tokenA = room.addPlayer(a.socket, "Alice", true);
+  room.addPlayer(b.socket, "Bob", false);
+  room.addPlayer(c.socket, "Cara", false);
+
+  room.startGame(a.socket.id);
+  room.chooseWord(a.socket.id, 0);
+
+  // Drawer drops: the turn freezes instead of being skipped.
+  room.handleDisconnect(a.socket.id);
+  assert.equal(room.paused, true, "drawer disconnect should pause the turn");
+  let snap = snapshot(room, b.socket.id);
+  assert.equal(snap.phase, "drawing", "phase should stay drawing while paused");
+  assert.equal(snap.paused, true);
+  assert.equal(snap.disconnectedDrawerName, "Alice");
+  assert.equal(snap.lastTurnReason, null, "turn must not be skipped yet");
+
+  // Drawer reconnects within the grace window: resume the same turn.
+  const a2 = makeSocket("a1");
+  const re = room.tryReconnect(a2.socket, tokenA, "Alice");
+  assert.equal(re, tokenA);
+  assert.equal(room.paused, false, "reconnect should resume the turn");
+
+  snap = snapshot(room, a2.socket.id);
+  assert.equal(snap.phase, "drawing");
+  assert.equal(snap.paused, false);
+  const drawer = snap.players.find((p) => p.isDrawer);
+  assert.ok(drawer);
+  assert.equal(drawer!.name, "Alice", "Alice should still be the drawer after resuming");
+});
+
+test("paused drawer turn is skipped once the reconnect grace expires", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
+  const { server } = makeServer();
+  const room = new Room(server, "RC0003");
+  t.after(() => room.dispose());
+
+  const a = makeSocket("a0");
+  const b = makeSocket("b0");
+  const c = makeSocket("c0");
+  room.addPlayer(a.socket, "Alice", true);
+  room.addPlayer(b.socket, "Bob", false);
+  room.addPlayer(c.socket, "Cara", false);
+
+  room.startGame(a.socket.id);
+  room.chooseWord(a.socket.id, 0);
+
+  room.handleDisconnect(a.socket.id);
+  assert.equal(room.paused, true);
+
+  // Let the 60s grace window elapse without a reconnect.
+  t.mock.timers.tick(60_000);
+
+  const snap = snapshot(room, b.socket.id);
+  assert.equal(room.paused, false, "grace expiry should clear the paused flag");
+  assert.equal(snap.phase, "turn_result");
+  assert.equal(snap.lastTurnReason, "skipped");
+  assert.equal(snap.players.find((p) => p.name === "Alice"), undefined, "drawer fully removed");
 });
 
 test("reactions: cleared between turns", (t) => {

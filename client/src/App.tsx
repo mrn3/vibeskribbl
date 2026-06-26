@@ -30,6 +30,11 @@ export function App() {
   const [joinFromUrl, setJoinFromUrl] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  /** Reconnection bookkeeping: the session token + whether we have an active join. */
+  const tokenRef = useRef<string | null>(localStorage.getItem("vs_token"));
+  const joinedRef = useRef(false);
+  const autoTriedRef = useRef(false);
+
   const [state, setState] = useState<ClientState | null>(null);
   const [chat, setChat] = useState<{ key: string; html: string; cls?: string }[]>([]);
   const prevPhaseRef = useRef<ClientState["phase"] | null>(null);
@@ -60,17 +65,85 @@ export function App() {
   const drawingRef = useRef(false);
   const lastRef = useRef<{ x: number; y: number } | null>(null);
 
+  const sendHello = useCallback(
+    (
+      opts: { name: string; roomCode?: string; create: boolean; token?: string | null },
+      onError?: (msg: string) => void
+    ) => {
+      socket.emit(
+        "room:hello",
+        {
+          name: opts.name,
+          roomCode: opts.create ? undefined : opts.roomCode,
+          create: opts.create,
+          token: opts.token ?? undefined
+        },
+        (ack: any) => {
+          if (!ack?.ok) {
+            onError?.(String(ack?.error ?? "Could not join."));
+            return;
+          }
+          joinedRef.current = true;
+          if (ack.token) {
+            tokenRef.current = String(ack.token);
+            localStorage.setItem("vs_token", String(ack.token));
+          }
+          if (ack.roomCode) {
+            setRoomCode(String(ack.roomCode));
+            localStorage.setItem("vs_room", String(ack.roomCode));
+          }
+        }
+      );
+    },
+    [socket]
+  );
+
   useEffect(() => {
-    const onConnect = () => setConnected(true);
+    const onConnect = () => {
+      setConnected(true);
+      const storedRoom = localStorage.getItem("vs_room");
+      const storedToken = tokenRef.current;
+      const storedName = localStorage.getItem("vs_name") || "Player";
+      if (!storedRoom || !storedToken) return;
+      if (joinedRef.current) {
+        // Reconnect after a dropped connection: silently resume the same slot.
+        sendHello(
+          { name: storedName, roomCode: storedRoom, create: false, token: storedToken },
+          () => {
+            joinedRef.current = false;
+            tokenRef.current = null;
+            localStorage.removeItem("vs_token");
+            setState(null);
+            setHelloError("Your session expired. Please rejoin.");
+          }
+        );
+      } else if (!autoTriedRef.current) {
+        // First load with a saved session: try to resume after a page refresh.
+        autoTriedRef.current = true;
+        const urlRoom = new URLSearchParams(window.location.search)
+          .get("room")
+          ?.trim()
+          .toUpperCase();
+        // Don't hijack an invite link that points at a different room.
+        if (urlRoom && urlRoom !== storedRoom) return;
+        sendHello(
+          { name: storedName, roomCode: storedRoom, create: false, token: storedToken },
+          () => {
+            tokenRef.current = null;
+            localStorage.removeItem("vs_token");
+          }
+        );
+      }
+    };
     const onDisconnect = () => setConnected(false);
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
-    setConnected(socket.connected);
+    if (socket.connected) onConnect();
     return () => {
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
     };
-  }, [socket]);
+  }, [socket, sendHello]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -195,14 +268,10 @@ export function App() {
   const join = (create: boolean) => {
     setHelloError(null);
     localStorage.setItem("vs_name", name);
-    localStorage.setItem("vs_room", roomCode);
-    socket.emit(
-      "room:hello",
-      { name, roomCode: create ? undefined : roomCode, create },
-      (ack: any) => {
-        if (!ack?.ok) setHelloError(String(ack?.error ?? "Could not join."));
-        else if (ack.roomCode) setRoomCode(String(ack.roomCode));
-      }
+    if (!create) localStorage.setItem("vs_room", roomCode);
+    sendHello(
+      { name, roomCode, create, token: create ? null : tokenRef.current },
+      (msg) => setHelloError(msg)
     );
   };
 
@@ -274,7 +343,9 @@ export function App() {
           <h1>VibeSkribbl</h1>
           <span>No ads. Private rooms. Skribbl-style rounds and scoring.</span>
         </div>
-        <div className="pill">{connected ? "Connected" : "Offline"}</div>
+        <div className="pill">
+          {connected ? "Connected" : joinedRef.current ? "Reconnecting…" : "Offline"}
+        </div>
       </div>
 
       {!state ? (
@@ -539,6 +610,19 @@ export function App() {
                 onPointerUp={onPointerUp}
                 onPointerCancel={onPointerUp}
               />
+
+              {state.paused ? (
+                <div className="overlay">
+                  <div className="card">
+                    <div style={{ fontWeight: 900, marginBottom: 8 }}>Paused</div>
+                    <div className="note">
+                      {state.disconnectedDrawerName
+                        ? `${state.disconnectedDrawerName} disconnected. Waiting for them to reconnect…`
+                        : "Waiting for a player to reconnect…"}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
 
               {state.phase === "choosing" && !isDrawer ? (
                 <div className="overlay">

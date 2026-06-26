@@ -53,11 +53,15 @@ io.on("connection", (socket) => {
 
   socket.on(
     "room:hello",
-    (payload: { name: string; roomCode?: string; create?: boolean }, ack?: (a: unknown) => void) => {
+    (
+      payload: { name: string; roomCode?: string; create?: boolean; token?: string },
+      ack?: (a: unknown) => void
+    ) => {
       try {
         const name = String(payload?.name ?? "Player");
         const wantCreate = Boolean(payload?.create);
         const code = payload?.roomCode?.trim().toUpperCase();
+        const token = payload?.token ? String(payload.token) : null;
 
         if (attached) {
           ack?.({ ok: false, error: "Already joined." });
@@ -77,6 +81,15 @@ io.on("connection", (socket) => {
           return;
         }
 
+        if (token && !wantCreate) {
+          const reToken = room.tryReconnect(socket, token, name);
+          if (reToken) {
+            attached = room;
+            ack?.({ ok: true, roomCode: room.code, token: reToken });
+            return;
+          }
+        }
+
         if (room.playerCount() >= room.settings.maxPlayers) {
           ack?.({ ok: false, error: "Room is full." });
           return;
@@ -88,8 +101,8 @@ io.on("connection", (socket) => {
         }
 
         attached = room;
-        room.addPlayer(socket, name, wantCreate);
-        ack?.({ ok: true, roomCode: room.code });
+        const newToken = room.addPlayer(socket, name, wantCreate);
+        ack?.({ ok: true, roomCode: room.code, token: newToken });
       } catch (e) {
         ack?.({ ok: false, error: e instanceof Error ? e.message : "error" });
       }
@@ -141,12 +154,7 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", () => {
     if (!attached) return;
-    const room = attached;
-    room.removePlayer(socket.id);
-    if (room.playerCount() === 0) {
-      room.dispose();
-      rooms.delete(room.code);
-    }
+    attached.handleDisconnect(socket.id);
     attached = null;
   });
 });

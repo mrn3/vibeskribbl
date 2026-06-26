@@ -5,6 +5,7 @@ import { parseCustomWords, pickWords } from "./words.js";
 
 type InternalPlayer = {
   id: string;
+  token: string;
   socketId: string;
   name: string;
   score: number;
@@ -14,6 +15,8 @@ type InternalPlayer = {
 const CHOICE_SECONDS = 15;
 const TURN_RESULT_SECONDS = 5;
 const REACTION_POINTS = 10;
+/** How long a disconnected player's slot (score, identity) is kept for reconnection. */
+const RECONNECT_GRACE_MS = 60_000;
 
 function randomId() {
   return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
@@ -67,6 +70,14 @@ export class Room {
   private sockets = new Map<string, Socket>();
   settings: RoomSettings = defaultSettings();
 
+  /** Disconnected players awaiting reconnection, keyed by their session token. */
+  private pending = new Map<string, { player: InternalPlayer; timer: NodeJS.Timeout }>();
+  /** Disposal timer started when the room has no connected players. */
+  private disposeTimer: NodeJS.Timeout | null = null;
+  /** True while the active turn is frozen waiting for the drawer to reconnect. */
+  paused = false;
+  private disconnectedDrawerName: string | null = null;
+
   phase: GamePhase = "lobby";
   private started = false;
 
@@ -111,6 +122,12 @@ export class Room {
 
   dispose() {
     this.stopTick();
+    if (this.disposeTimer) {
+      clearTimeout(this.disposeTimer);
+      this.disposeTimer = null;
+    }
+    for (const entry of this.pending.values()) clearTimeout(entry.timer);
+    this.pending.clear();
   }
 
   private stopTick() {
@@ -131,15 +148,17 @@ export class Room {
     return this.started;
   }
 
-  addPlayer(socket: Socket, name: string, makeHost: boolean) {
+  addPlayer(socket: Socket, name: string, makeHost: boolean): string {
     if (this.players.size >= this.settings.maxPlayers) {
       socket.emit("room:error", { message: "Room is full." });
-      return;
+      return "";
     }
 
     const id = randomId();
+    const token = randomId();
     const player: InternalPlayer = {
       id,
+      token,
       socketId: socket.id,
       name: name.trim().slice(0, 21) || "Player",
       score: 0,
@@ -148,7 +167,161 @@ export class Room {
     this.players.set(socket.id, player);
     this.sockets.set(socket.id, socket);
     socket.join(this.code);
+    this.cancelDispose();
     this.broadcastState();
+    return token;
+  }
+
+  /**
+   * Reattach a previously disconnected player (matched by session token) to a new
+   * socket, preserving their identity and score. Returns the player's token on
+   * success, or null when no matching pending slot exists.
+   */
+  tryReconnect(socket: Socket, token: string, name: string): string | null {
+    const entry = this.pending.get(token);
+    if (!entry) return null;
+
+    clearTimeout(entry.timer);
+    this.pending.delete(token);
+
+    const p = entry.player;
+    const trimmed = name.trim().slice(0, 21);
+    if (trimmed) p.name = trimmed;
+    p.socketId = socket.id;
+    this.players.set(socket.id, p);
+    this.sockets.set(socket.id, socket);
+    socket.join(this.code);
+    this.cancelDispose();
+    this.normalizeHost();
+
+    if (this.paused && this.currentDrawerId === p.id) {
+      this.paused = false;
+      this.disconnectedDrawerName = null;
+      this.startTick();
+    }
+
+    this.broadcastState();
+    return p.token;
+  }
+
+  /**
+   * Production disconnect path: keep the player's slot in `pending` for a grace
+   * period so they can reconnect and resume. If they were the active drawer, the
+   * turn is paused rather than skipped until they return or the grace expires.
+   */
+  handleDisconnect(socketId: string) {
+    const p = this.players.get(socketId);
+    if (!p) return;
+
+    const drawer = this.drawerPlayer();
+    const isDrawer = !!drawer && drawer.id === p.id;
+    const inActiveTurn =
+      this.started && (this.phase === "choosing" || this.phase === "drawing") && isDrawer;
+
+    this.players.delete(socketId);
+    this.sockets.delete(socketId);
+
+    const timer = setTimeout(() => this.finalizeRemoval(p.token), RECONNECT_GRACE_MS);
+    this.pending.set(p.token, { player: p, timer });
+
+    if (inActiveTurn) {
+      this.paused = true;
+      this.disconnectedDrawerName = p.name;
+      this.stopTick();
+      this.normalizeHost();
+      this.scheduleDisposeIfEmpty();
+      this.broadcastState();
+      return;
+    }
+
+    if (p.isHost) this.normalizeHost();
+
+    if (this.players.size <= 1 && this.started) {
+      this.endGameToLobby();
+      this.scheduleDisposeIfEmpty();
+      return;
+    }
+
+    if (this.phase === "drawing" && this.allActiveGuessed()) {
+      this.finishDrawing("all_guessed");
+    } else {
+      this.broadcastState();
+    }
+    this.scheduleDisposeIfEmpty();
+  }
+
+  /** Permanently drop a pending player once their reconnection grace expires. */
+  private finalizeRemoval(token: string) {
+    const entry = this.pending.get(token);
+    if (!entry) return;
+    clearTimeout(entry.timer);
+    this.pending.delete(token);
+
+    const p = entry.player;
+    this.reactions.delete(p.id);
+    this.guessed.delete(p.id);
+
+    if (this.paused && this.currentDrawerId === p.id) {
+      this.paused = false;
+      this.disconnectedDrawerName = null;
+      this.skipCurrentTurn();
+    }
+
+    this.normalizeHost();
+
+    if (this.players.size <= 1 && this.started && this.pending.size === 0) {
+      this.endGameToLobby();
+    } else {
+      this.broadcastState();
+    }
+    this.scheduleDisposeIfEmpty();
+  }
+
+  private normalizeHost() {
+    const list = this.playersList();
+    if (!list.length) return;
+    if (list.filter((p) => p.isHost).length === 1) return;
+    for (const p of list) p.isHost = false;
+    list[0].isHost = true;
+  }
+
+  private cancelDispose() {
+    if (this.disposeTimer) {
+      clearTimeout(this.disposeTimer);
+      this.disposeTimer = null;
+    }
+  }
+
+  private scheduleDisposeIfEmpty() {
+    if (this.players.size > 0) {
+      this.cancelDispose();
+      return;
+    }
+    if (this.disposeTimer) return;
+    this.stopTick();
+    this.disposeTimer = setTimeout(() => {
+      if (this.players.size === 0) {
+        this.dispose();
+        rooms.delete(this.code);
+      }
+    }, RECONNECT_GRACE_MS);
+  }
+
+  private skipCurrentTurn() {
+    this.drawerDisconnected = true;
+    this.revertScoresSinceBaseline();
+    this.secretWord = null;
+    this.wordHints = null;
+    this.wordOptions = null;
+    this.drawing = [];
+    this.guessed.clear();
+    this.turnGuesserPoints = [];
+    this.lastWord = null;
+    this.lastTurnReason = "skipped";
+    this.currentDrawerId = null;
+    this.phase = "turn_result";
+    this.timeLeft = TURN_RESULT_SECONDS;
+    this.startTick();
   }
 
   removePlayer(socketId: string) {
@@ -156,27 +329,13 @@ export class Room {
     if (!p) return;
     const wasHost = p.isHost;
 
-    const list = this.playersList();
     const drawer = this.drawerPlayer();
     const isDrawer = !!drawer && drawer.id === p.id;
     const inActiveTurn =
       this.started && (this.phase === "choosing" || this.phase === "drawing") && isDrawer;
 
     if (inActiveTurn) {
-      this.drawerDisconnected = true;
-      this.revertScoresSinceBaseline();
-      this.secretWord = null;
-      this.wordHints = null;
-      this.wordOptions = null;
-      this.drawing = [];
-      this.guessed.clear();
-      this.turnGuesserPoints = [];
-      this.lastWord = null;
-      this.lastTurnReason = "skipped";
-      this.currentDrawerId = null;
-      this.phase = "turn_result";
-      this.timeLeft = TURN_RESULT_SECONDS;
-      this.startTick();
+      this.skipCurrentTurn();
     }
 
     this.players.delete(socketId);
@@ -215,6 +374,8 @@ export class Room {
     this.scoreBaseline.clear();
     this.reactions.clear();
     this.currentDrawerId = null;
+    this.paused = false;
+    this.disconnectedDrawerName = null;
     this.broadcastState();
   }
 
@@ -248,6 +409,14 @@ export class Room {
 
   private guesserCount() {
     return Math.max(0, this.players.size - 1);
+  }
+
+  /** True when every connected guesser has guessed the word this turn. */
+  private allActiveGuessed(): boolean {
+    const d = this.drawerPlayer();
+    const guessers = this.playersList().filter((p) => !d || p.id !== d.id);
+    if (!guessers.length) return false;
+    return guessers.every((p) => this.guessed.has(p.id));
   }
 
   private broadcastState() {
@@ -311,7 +480,9 @@ export class Room {
         this.phase === "turn_result" || this.phase === "game_over" ? this.lastWord : null,
       likes,
       dislikes,
-      selfReaction
+      selfReaction,
+      paused: this.paused,
+      disconnectedDrawerName: this.paused ? this.disconnectedDrawerName : null
     };
   }
 
@@ -383,6 +554,8 @@ export class Room {
 
   private beginTurn() {
     this.stopTick();
+    this.paused = false;
+    this.disconnectedDrawerName = null;
     this.drawerDisconnected = false;
     this.lastTurnReason = null;
     this.lastWord = null;
@@ -519,7 +692,7 @@ export class Room {
       msSinceFirst
     });
 
-    if (this.guessed.size >= G) {
+    if (this.allActiveGuessed()) {
       this.finishDrawing("all_guessed");
     } else {
       this.broadcastState();
