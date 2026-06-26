@@ -14,6 +14,8 @@ type InternalPlayer = {
 
 const CHOICE_SECONDS = 15;
 const TURN_RESULT_SECONDS = 5;
+/** How long the podium/game-over screen stays up before returning to the lobby. */
+const GAME_OVER_SECONDS = 20;
 const REACTION_POINTS = 10;
 /** How long a disconnected player's slot (score, identity) is kept for reconnection. */
 const RECONNECT_GRACE_MS = 60_000;
@@ -804,11 +806,12 @@ export class Room {
       const top = ranked[0]?.score ?? 0;
       this.winners = ranked.filter((p) => p.score === top).map((p) => ({ name: p.name, score: p.score }));
       this.phase = "game_over";
+      this.timeLeft = GAME_OVER_SECONDS;
     } else {
       this.phase = "turn_result";
+      this.timeLeft = TURN_RESULT_SECONDS;
     }
 
-    this.timeLeft = TURN_RESULT_SECONDS;
     this.startTick();
     this.broadcastState();
   }
@@ -820,7 +823,7 @@ export class Room {
 
     if (this.turnCounter >= total - 1) {
       this.phase = "game_over";
-      this.timeLeft = TURN_RESULT_SECONDS;
+      this.timeLeft = GAME_OVER_SECONDS;
       this.startTick();
       this.broadcastState();
       return;
