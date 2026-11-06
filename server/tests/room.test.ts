@@ -4,6 +4,7 @@ import type { Server, Socket } from "socket.io";
 
 import { Room } from "../src/room.js";
 import type { DrawCommand } from "../src/types.js";
+import { wordDifficulty } from "../src/words.js";
 
 type EmitCall = { event: string; payload: unknown };
 type Broadcast = { code: string; event: string; payload: unknown };
@@ -40,6 +41,7 @@ type Snap = {
   phase: string;
   players: SnapPlayer[];
   wordOptions: string[] | null;
+  wordOptionDifficulties: ("easy" | "medium" | "hard")[] | null;
   lastTurnReason: string | null;
   likes: number;
   dislikes: number;
@@ -65,6 +67,59 @@ function setupRoom(numPlayers: number) {
 }
 
 const LINE: DrawCommand = { type: "line", x0: 0, y0: 0, x1: 1, y1: 1, c: 0, w: 2 };
+
+test("word choices follow the round and drawer's standing without leaking to guessers", (t) => {
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  const { room, players } = setupRoom(3);
+  t.after(() => room.dispose());
+  room.startGame(players[0].socket.id);
+
+  const internal = room as unknown as {
+    secretWord: string | null;
+    players: Map<string, { score: number }>;
+  };
+  const finishTurn = (drawer: number) => {
+    room.chooseWord(players[drawer].socket.id, 0);
+    assert.ok(internal.secretWord);
+    for (let i = 0; i < players.length; i++) {
+      if (i !== drawer) room.guess(players[i].socket.id, internal.secretWord!);
+    }
+    assert.equal(snapshot(room, players[drawer].socket.id).phase, "turn_result");
+  };
+  const advance = () => {
+    for (let i = 0; i < 5; i++) t.mock.timers.tick(1000);
+  };
+  const setScores = () => {
+    [300, 200, 100].forEach((score, i) => {
+      internal.players.get(players[i].socket.id)!.score = score;
+    });
+  };
+  const assertChoices = (drawer: number, expected: string[]) => {
+    const state = snapshot(room, players[drawer].socket.id);
+    assert.equal(state.phase, "choosing");
+    assert.deepEqual(state.wordOptions?.map(wordDifficulty), expected);
+    assert.deepEqual(state.wordOptionDifficulties, expected);
+    const guesser = snapshot(room, players[(drawer + 1) % players.length].socket.id);
+    assert.equal(guesser.wordOptions, null);
+    assert.equal(guesser.wordOptionDifficulties, null);
+  };
+
+  for (let drawer = 0; drawer < 3; drawer++) {
+    assertChoices(drawer, ["easy", "medium", "hard"]);
+    finishTurn(drawer);
+    if (drawer === 2) setScores();
+    advance();
+  }
+  assertChoices(0, ["hard", "hard", "hard"]);
+  finishTurn(0);
+  setScores();
+  advance();
+  assertChoices(1, ["easy", "medium", "hard"]);
+  finishTurn(1);
+  setScores();
+  advance();
+  assertChoices(2, ["easy", "easy", "medium"]);
+});
 
 test("drawer is locked at turn start; non-drawer disconnect does not transfer drawing rights", (t) => {
   const { room, players, broadcasts } = setupRoom(4);

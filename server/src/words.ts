@@ -426,6 +426,59 @@ const DEFAULT_WORDS = [
   "zeppelin"
 ];
 
+export type WordDifficulty = "easy" | "medium" | "hard";
+
+const EASY_WORDS = new Set([
+  "apple", "arm", "banana", "bed", "bird", "book", "bus", "cake", "car",
+  "cat", "chair", "cloud", "cup", "dog", "door", "duck", "ear", "egg",
+  "eye", "fish", "flower", "frog", "hat", "heart", "house", "key", "leaf",
+  "moon", "nose", "orange", "pig", "pizza", "rain", "rainbow", "shoe",
+  "snake", "snowman", "sock", "spider", "spoon", "star", "sun", "table",
+  "tree", "triangle", "umbrella", "window"
+]);
+
+const HARD_WORDS = new Set([
+  "astronaut", "avalanche", "backflip", "blizzard", "boomerang", "bulldozer",
+  "caterpillar", "chameleon", "clarinet", "compass", "corkscrew", "curling",
+  "dishwasher", "diving", "fingerprint", "flash drive", "galaxy", "guitarist",
+  "hiking", "hot air balloon", "hourglass", "hoverboard", "hurricane",
+  "jellyfish", "lawn mower", "magnifying glass", "mermaid", "microscope",
+  "nightmare", "nutcracker", "parachute", "picture frame", "pirate ship",
+  "portrait", "roller coaster", "scarecrow", "skyscraper", "slingshot",
+  "slot machine", "snorkel", "stethoscope", "submarine", "thermometer",
+  "tractor beam", "traffic light", "typewriter", "washing machine",
+  "wheelbarrow", "zeppelin"
+]);
+
+const DEFAULT_WORD_SET = new Set(DEFAULT_WORDS);
+
+export function wordDifficulty(word: string): WordDifficulty {
+  const normalized = word.toLowerCase();
+  if (EASY_WORDS.has(normalized)) return "easy";
+  if (HARD_WORDS.has(normalized)) return "hard";
+  if (DEFAULT_WORD_SET.has(normalized)) return "medium";
+
+  // Custom words have no curated rating; length is only a rough estimate.
+  const length = normalized.replace(/\s/g, "").length;
+  return length <= 4 ? "easy" : length <= 8 ? "medium" : "hard";
+}
+
+export function difficultiesForStanding(round: number, score: number, scores: number[]): WordDifficulty[] {
+  const top = Math.max(...scores);
+  const bottom = Math.min(...scores);
+  if (round <= 1 || top === bottom) return ["easy", "medium", "hard"];
+
+  if (score === top) {
+    const next = Math.max(...scores.filter((other) => other < top));
+    if (scores.filter((other) => other === top).length === 1 && top - next >= 100 && top >= next * 1.5) {
+      return ["hard"];
+    }
+    return ["medium", "hard"];
+  }
+  if (score === bottom) return ["easy", "easy", "medium"];
+  return ["easy", "medium", "hard"];
+}
+
 function normalizeCustomWord(w: string) {
   return w.trim().replace(/\s+/g, " ");
 }
@@ -440,7 +493,8 @@ export function parseCustomWords(text: string) {
 export function pickWords(
   count: number,
   settings: { customWordsOnly: boolean; customWords: string[] },
-  exclude?: Set<string>
+  exclude?: Set<string>,
+  difficulties: WordDifficulty[] = ["easy", "medium", "hard"]
 ) {
   const pool = settings.customWordsOnly
     ? settings.customWords
@@ -452,19 +506,15 @@ export function pickWords(
   if (uniq.length === 0) return [];
 
   const target = Math.min(count, uniq.length);
-  const fresh = exclude ? uniq.filter((w) => !exclude.has(w)) : uniq.slice();
-
   const out: string[] = [];
-  while (out.length < Math.min(target, fresh.length)) {
-    const i = Math.floor(Math.random() * fresh.length);
-    out.push(fresh.splice(i, 1)[0]);
-  }
-  if (out.length < target) {
-    const fallback = uniq.filter((w) => !out.includes(w));
-    while (out.length < target && fallback.length) {
-      const i = Math.floor(Math.random() * fallback.length);
-      out.push(fallback.splice(i, 1)[0]);
-    }
+  while (out.length < target) {
+    const desired = difficulties[out.length % difficulties.length];
+    const available = uniq.filter((w) => !out.includes(w));
+    const matching = available.filter((w) => wordDifficulty(w) === desired);
+    const candidates = matching.length ? matching : available;
+    const fresh = exclude ? candidates.filter((w) => !exclude.has(w)) : candidates;
+    const pool = fresh.length ? fresh : candidates;
+    out.push(pool[Math.floor(Math.random() * pool.length)]);
   }
   return out;
 }

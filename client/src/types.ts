@@ -65,6 +65,7 @@ export type ClientState = {
   timeLeft: number;
   wordHints: WordHint[] | null;
   wordOptions: string[] | null;
+  wordOptionDifficulties: ("easy" | "medium" | "hard")[] | null;
   lastWord: string | null;
   lastTurnReason: "all_guessed" | "time" | "skipped" | null;
   drawing: DrawCommand[];

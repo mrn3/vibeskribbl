@@ -1,7 +1,7 @@
 import type { Server, Socket } from "socket.io";
 import type { DrawCommand, GamePhase, ReactionKind, RoomSettings, WordHint } from "./types.js";
 import { drawerScoreFromGuesserPoints, guesserScore } from "./scoring.js";
-import { parseCustomWords, pickWords } from "./words.js";
+import { difficultiesForStanding, parseCustomWords, pickWords, wordDifficulty } from "./words.js";
 
 type InternalPlayer = {
   id: string;
@@ -474,6 +474,8 @@ export class Room {
             : this.wordHints
           : null,
       wordOptions: this.phase === "choosing" && isDrawer ? this.wordOptions : null,
+      wordOptionDifficulties:
+        this.phase === "choosing" && isDrawer ? this.wordOptions?.map(wordDifficulty) ?? null : null,
       lastWord: this.lastWord,
       lastTurnReason: this.lastTurnReason,
       drawing: this.drawing,
@@ -578,16 +580,20 @@ export class Room {
     this.currentDrawerId = drawerNow ? drawerNow.id : null;
 
     this.phase = "choosing";
+    const difficulties = drawerNow
+      ? difficultiesForStanding(this.currentRound(), drawerNow.score, this.playersList().map((p) => p.score))
+      : ["easy", "medium", "hard"] as const;
     this.wordOptions = pickWords(
       this.settings.wordChoices,
       {
         customWordsOnly: this.settings.customWordsOnly,
         customWords: this.settings.customWords
       },
-      this.usedWords
+      this.usedWords,
+      [...difficulties]
     );
     if (!this.wordOptions.length) {
-      this.wordOptions = ["house", "cat", "tree"];
+      this.wordOptions = pickWords(this.settings.wordChoices, { customWordsOnly: false, customWords: [] }, this.usedWords, [...difficulties]);
     }
     this.timeLeft = CHOICE_SECONDS;
     this.startTick();

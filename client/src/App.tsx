@@ -513,6 +513,9 @@ export function App() {
                           defaultValue={state.settings.customWords.join(", ")}
                           onBlur={(e) => updateSettings({ customWordsText: e.target.value })}
                         />
+                        <div className="note">
+                          Custom word difficulty is estimated by length. Small lists may not cover every difficulty.
+                        </div>
                       </div>
                     </div>
                     <div style={{ height: 10 }} />
@@ -640,12 +643,13 @@ export function App() {
                     <div className="wordPick">
                       {(state.wordOptions ?? []).map((w, i) => (
                         <button key={`${w}_${i}`} type="button" onClick={() => socket.emit("game:chooseWord", i)}>
-                          {w}
+                          {w} <span className="wordDifficulty">{state.wordOptionDifficulties?.[i]}</span>
                         </button>
                       ))}
                     </div>
                     <div className="note" style={{ marginTop: 10 }}>
-                      If you do not choose in time, a random word is picked for you.
+                      After round one, leaders get harder choices and players in last place get easier ones.
+                      Custom word difficulty is estimated. If time runs out, a random word is picked.
                     </div>
                   </div>
                 </div>
@@ -882,4 +886,3 @@ function Podium({ players, secretWord }: { players: PublicPlayer[]; secretWord: 
     </div>
   );
 }
-

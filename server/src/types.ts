@@ -69,6 +69,7 @@ export type ClientState = {
   wordHints: WordHint[] | null;
   /** Drawer sees options while choosing */
   wordOptions: string[] | null;
+  wordOptionDifficulties: ("easy" | "medium" | "hard")[] | null;
   /** Shown after turn for everyone */
   lastWord: string | null;
   lastTurnReason: "all_guessed" | "time" | "skipped" | null;

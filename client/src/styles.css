@@ -277,6 +277,15 @@ canvas.game.canvas--drawer.canvas--fill-tool {
   border-color: rgba(124, 92, 255, 0.55);
 }
 
+.wordDifficulty {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  text-transform: capitalize;
+}
+
 .toolbar {
   display: flex;
   gap: 10px;
@@ -765,4 +774,3 @@ canvas.game.canvas--drawer.canvas--fill-tool {
   .podium__slot--bronze .podium__block { height: 92px; }
   .confetti { display: none; }
 }
-
