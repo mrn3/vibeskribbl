@@ -1,6 +1,6 @@
 import type { Server, Socket } from "socket.io";
 import type { DrawCommand, GamePhase, ReactionKind, RoomSettings, WordHint } from "./types.js";
-import { drawerScoreFromGuesserPoints, guesserScore } from "./scoring.js";
+import { applyCatchUpBonus, drawerScoreFromGuesserPoints, guesserScore } from "./scoring.js";
 import { difficultiesForStanding, parseCustomWords, pickWords, wordDifficulty } from "./words.js";
 
 type InternalPlayer = {
@@ -676,7 +676,7 @@ export class Room {
     const G = this.guesserCount();
     const already = this.guessed.size;
     const hintsLeft = Math.max(0, this.hintSlots.length - this.hintsRevealed);
-    const pts = guesserScore({
+    const basePts = guesserScore({
       drawTimeSec: this.settings.drawTime,
       secondsLeft: this.timeLeft,
       hintCount: Math.max(1, this.hintSlots.length || 1),
@@ -684,10 +684,15 @@ export class Room {
       guesserCount: Math.max(1, G),
       alreadyGuessedBeforeYou: already
     });
+    const pts = applyCatchUpBonus(
+      basePts,
+      this.scoreBaseline.get(p.id) ?? 0,
+      Math.max(0, ...this.scoreBaseline.values())
+    );
 
     p.score += pts;
     this.guessed.add(p.id);
-    this.turnGuesserPoints.push(pts);
+    this.turnGuesserPoints.push(basePts);
 
     const now = Date.now();
     if (this.firstGuessAt === null) this.firstGuessAt = now;

@@ -279,6 +279,56 @@ type CorrectChat = {
   msSinceFirst: number;
 };
 
+test("catch-up uses turn-start standings, refreshes each turn, and does not inflate drawer rewards", (t) => {
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  const { room, players, broadcasts } = setupRoom(4);
+  t.after(() => room.dispose());
+  const internal = room as unknown as {
+    secretWord: string | null;
+    players: Map<string, { score: number }>;
+  };
+  const advance = () => {
+    for (let i = 0; i < 5; i++) t.mock.timers.tick(1000);
+  };
+  const chooseWord = (drawer: number) => {
+    room.chooseWord(players[drawer].socket.id, 0);
+    const secret = internal.secretWord;
+    assert.ok(secret);
+    return secret;
+  };
+
+  room.startGame(players[0].socket.id);
+  const firstWord = chooseWord(0);
+  assert.deepEqual(room.guess(players[1].socket.id, firstWord), { kind: "ok", points: 420 });
+  assert.deepEqual(room.guess(players[2].socket.id, firstWord), { kind: "ok", points: 280 });
+  assert.deepEqual(room.guess(players[3].socket.id, firstWord), { kind: "ok", points: 252 });
+
+  [1000, 500, 500, 0].forEach((score, i) => {
+    internal.players.get(players[i].socket.id)!.score = score;
+  });
+  advance();
+  const secondWord = chooseWord(1);
+  assert.deepEqual(room.guess(players[3].socket.id, `${secondWord}!`), { kind: "wrong", guess: `${secondWord}!` });
+  assert.equal(drawerScoreOf(snapshot(room, players[3].socket.id), "P3"), 0);
+  assert.deepEqual(room.guess(players[0].socket.id, secondWord), { kind: "ok", points: 420 });
+  assert.deepEqual(room.guess(players[2].socket.id, secondWord), { kind: "ok", points: 350 });
+  assert.deepEqual(room.guess(players[2].socket.id, secondWord), { kind: "already" });
+  assert.deepEqual(room.guess(players[3].socket.id, secondWord), { kind: "ok", points: 378 });
+  const state = snapshot(room, players[0].socket.id);
+  assert.equal(state.phase, "turn_result");
+  assert.deepEqual(players.map((_, i) => drawerScoreOf(state, `P${i}`)), [1420, 817, 850, 378]);
+  const corrects = broadcasts
+    .filter((b) => b.event === "room:chat" && (b.payload as { kind: string }).kind === "correct")
+    .map((b) => b.payload as CorrectChat);
+  assert.deepEqual(corrects.slice(-3).map((chat) => chat.points), [420, 350, 378]);
+
+  advance();
+  const thirdWord = chooseWord(2);
+  assert.deepEqual(room.guess(players[0].socket.id, thirdWord), { kind: "ok", points: 420 });
+  assert.deepEqual(room.guess(players[1].socket.id, thirdWord), { kind: "ok", points: 339 });
+  assert.deepEqual(room.guess(players[3].socket.id, thirdWord), { kind: "ok", points: 344 });
+});
+
 test("correct-guess chat events include msSinceFirst measured from the first guesser", (t) => {
   t.mock.timers.enable({ apis: ["setInterval", "Date"] });
   const { room, players, broadcasts } = setupRoom(4);

@@ -1,14 +1,17 @@
 /**
- * Skribbl-style scoring (server-side, documented behavior):
- * - Guessers: faster guesses earn more; earlier correct guesses earn more than later ones.
+ * Skribbl-style scoring with catch-up rules (server-side, documented behavior):
+ * - Guessers: faster guesses earn more; earlier correct guesses earn more than later ones,
+ *   with the guess-order multiplier never falling below 60%.
+ * - Correct guesses receive up to 50% extra based on the deficit relative to the leader's
+ *   score, using standings frozen at turn start. Tied leaders and all-zero scores get no bonus.
  * - Drawer: if at least one player guesses correctly, the drawer earns points; if nobody
  *   guesses (or the drawer leaves mid-turn before resolution), the drawer does not earn
  *   drawer points for that word.
  *
  * The time curve matches the same shape as the “competitive” preset in scribble.rs
  * (a popular skribbl-like implementation), and the drawer reward matches scribble.rs’s
- * drawer rule: average of guessers’ points earned on that turn (counting only guessers
- * who earned points).
+ * drawer rule: average of guessers' base points earned on that turn (counting only guessers
+ * who earned points), excluding catch-up bonuses.
  */
 
 function clamp(n: number, lo: number, hi: number) {
@@ -38,10 +41,16 @@ export function guesserScore(input: {
 
   const G = Math.max(1, input.guesserCount);
   const k = clamp(input.alreadyGuessedBeforeYou, 0, G - 1);
-  const orderMult = (G - k) / G;
+  const orderMult = Math.max(0.6, (G - k) / G);
 
   const raw = (timeComponent + hintBonus) * orderMult;
   return Math.max(0, Math.floor(raw));
+}
+
+export function applyCatchUpBonus(points: number, scoreAtTurnStart: number, leaderScoreAtTurnStart: number): number {
+  if (leaderScoreAtTurnStart <= 0) return points;
+  const deficit = clamp((leaderScoreAtTurnStart - scoreAtTurnStart) / leaderScoreAtTurnStart, 0, 1);
+  return Math.floor(points * (1 + 0.5 * deficit));
 }
 
 export function drawerScoreFromGuesserPoints(guesserPoints: number[]): number {

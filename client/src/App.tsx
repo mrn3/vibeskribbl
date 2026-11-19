@@ -385,9 +385,10 @@ export function App() {
               </button>
             </div>
             <div className="note">
-              Tip: the host starts the match after everyone joins. Default rules mirror skribbl private rooms: multiple
-              rounds, everyone draws each round, draw time affects points, and the drawer earns the average of
-              guessers’ points when people guess correctly.
+              Tip: the host starts the match after everyone joins. Everyone draws each round. Faster guesses earn
+              more, but the guess-order multiplier never drops below 60%. Players behind the leader earn up to 50%
+              extra for correct guesses, based on standings at turn start. The drawer earns the average of correct
+              guessers’ points before catch-up bonuses.
             </div>
           </div>
         </div>
